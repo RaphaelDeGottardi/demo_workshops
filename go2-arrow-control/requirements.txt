@@ -1,0 +1,10 @@
+Flask==3.0.0
+opencv-python==4.8.1.78
+numpy==1.24.3
+Werkzeug==3.0.1
+tflite-runtime==2.14.0
+Pillow==10.1.0
+
+# Unitree GO2 SDK
+# Install separately from Unitree: https://github.com/unitreerobotics/unitree_sdk2_python
+# pip install unitree_sdk2py
