@@ -550,16 +550,20 @@ if __name__ == '__main__':
     control_logger.info("%s", "=" * 60)
     control_logger.info("GO2 Arrow Control System Starting...")
     control_logger.info("%s", "=" * 60)
-    control_logger.info("Server will be available at: http://0.0.0.0:5000")
+    control_logger.info("Server will be available at: https://0.0.0.0:5000")
     control_logger.info("Models will be saved to: %s", os.path.abspath(UPLOAD_FOLDER))
     # Log detected network addresses
     try:
         import socket
         ips = get_network_info()
         for ip in ips:
-            control_logger.info("Accessible at: http://%s:5000", ip)
+            control_logger.info("Accessible at: https://%s:5000", ip)
     except Exception as e:
         control_logger.warning("Could not determine network interfaces: %s", e)
     control_logger.info("%s", "=" * 60)
 
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    control_logger.info("Access the server via HTTPS to enable camera permissions.")
+    control_logger.info("Accept the security warning in your browser (Advanced -> Proceed).")
+    
+    # Run with ad-hoc SSL context to allow camera access over network
+    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True, ssl_context='adhoc')
