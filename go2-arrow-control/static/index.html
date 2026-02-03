@@ -3,79 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GO2 Arrow Control - Teachable Machine</title>
+    <title>GO2 Arrow Control - Setup</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .log-container {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 15px;
+            border-radius: 5px;
+            height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+            border: 1px solid #333;
+            font-size: 0.9em;
+        }
+        .log-entry { margin-bottom: 2px; }
+        .hero-section {
+            text-align: center;
+            margin: 40px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>🤖 GO2 Arrow Control System</h1>
-            <a href="/teacher" class="btn btn-small" style="float:right;margin-top:-30px;">Teacher</a>
-            <p class="subtitle">Control your robot with Teachable Machine models</p>
-            <div class="status-bar">
-                <div class="status-item">
-                    <span class="status-label">Model:</span>
-                    <span id="model-status" class="status-value">No model loaded</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Robot:</span>
-                    <span id="robot-status" class="status-value">Disconnected</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Inference:</span>
-                    <span id="inference-status" class="status-value">Stopped</span>
-                </div>
-            </div>
+            <a href="/docs" class="btn btn-small" style="float:right;margin-top:-30px;">Documentation</a>
+            <p class="subtitle">Setup & Monitoring Dashboard</p>
         </header>
 
         <div class="main-content">
-            <!-- Left Panel: Camera Feed -->
-            <div class="panel camera-panel">
-                <h2>📹 Camera Feed</h2>
-                <div class="camera-container">
-                    <video id="webcam" autoplay playsinline></video>
-                    <canvas id="canvas" style="display: none;"></canvas>
-                    <div class="camera-overlay">
-                        <div id="prediction-display" class="prediction-display">
-                            Waiting for camera...
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="control-buttons">
-                    <button id="start-btn" class="btn btn-success" disabled>
-                        ▶️ Start Control
-                    </button>
-                    <button id="stop-btn" class="btn btn-warning" disabled>
-                        ⏸️ Stop Control
-                    </button>
-                    <button id="emergency-btn" class="btn btn-danger">
-                        🛑 EMERGENCY STOP
-                    </button>
-                </div>
-            </div>
-
-            <!-- Right Panel: Model Management -->
-            <div class="panel model-panel">
-                <h2>🧠 Model Management</h2>
+            <!-- Left Column: Upload & Models -->
+            <div class="panel">
+                <h2>1. Model Management</h2>
                 
                 <!-- Upload Section -->
                 <div class="section">
                     <h3>Upload New Model</h3>
                     <div class="upload-instructions">
-                        <p><strong>Steps:</strong></p>
-                        <ol>
-                            <li>Train your model on <a href="https://teachablemachine.withgoogle.com/" target="_blank">Teachable Machine</a></li>
-                            <li>Export as <strong>TensorFlow Lite</strong> (Quantized)</li>
-                            <li>Upload the <code>.tflite</code> file below</li>
-                        </ol>
-                        <p><strong>Classes needed:</strong> Forward, Right, Left, Rotate</p>
+                        <p>Upload .tflite models from Teachable Machine.</p>
                     </div>
                     
                     <form id="upload-form">
                         <div class="form-group">
                             <label for="model-name">Model Name:</label>
-                            <input type="text" id="model-name" placeholder="e.g., John's Arrows" required>
+                            <input type="text" id="model-name" placeholder="e.g., Team Alpha" required>
                         </div>
                         
                         <div class="form-group">
@@ -89,74 +65,43 @@
                     </form>
                 </div>
 
-                <!-- Available Models Section -->
-                <div class="section">
+                <!-- Available Models Section (Read Only) -->
+                <div class="section" style="margin-top: 20px;">
                     <h3>Available Models</h3>
                     <div id="models-list" class="models-list">
                         <p class="loading">Loading models...</p>
                     </div>
                 </div>
-
-                <!-- Settings Section -->
-                <div class="section">
-                    <h3>⚙️ Settings</h3>
-                    <div class="form-group">
-                        <label for="confidence-threshold">
-                            Confidence Threshold: <span id="confidence-value">80%</span>
-                        </label>
-                        <input type="range" id="confidence-threshold" min="50" max="95" value="80" step="5">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="max-speed">
-                            Max Speed: <span id="speed-value">0.3</span>
-                        </label>
-                        <input type="range" id="max-speed" min="0.1" max="0.5" value="0.3" step="0.05">
-                    </div>
-                    
-                    <button id="save-settings-btn" class="btn btn-secondary">
-                        💾 Save Settings
-                    </button>
-                </div>
             </div>
-        </div>
 
-        <!-- Instructions Section -->
-        <div class="instructions-panel">
-            <h2>📖 How to Use</h2>
-            <div class="instructions-grid">
-                <div class="instruction-card">
-                    <div class="instruction-number">1</div>
-                    <h4>Train Your Model</h4>
-                    <p>Use Teachable Machine to train a model that recognizes 4 arrow directions on paper</p>
+            <!-- Right Column: Logs & Login -->
+            <div class="panel">
+                <!-- Login Section -->
+                <div class="section" style="background: #eef; border-color: #ccd;">
+                    <h3>🔐 Control Access</h3>
+                    <form action="/login" method="POST" class="inline-form">
+                        <div class="form-group">
+                            <input type="password" name="password" placeholder="Password (default: go2demo)" required>
+                        </div>
+                        <button type="submit" class="btn btn-success">Login to Control Page 🚀</button>
+                    </form>
                 </div>
-                <div class="instruction-card">
-                    <div class="instruction-number">2</div>
-                    <h4>Upload Model</h4>
-                    <p>Export as TensorFlow Lite and upload it with a unique name</p>
-                </div>
-                <div class="instruction-card">
-                    <div class="instruction-number">3</div>
-                    <h4>Load Model</h4>
-                    <p>Click "Load" next to your model to activate it</p>
-                </div>
-                <div class="instruction-card">
-                    <div class="instruction-number">4</div>
-                    <h4>Start Control</h4>
-                    <p>Click "Start Control" and show arrows to the camera to move the robot!</p>
+
+                <h2>2. System Logs</h2>
+                <div id="logs-area" class="log-container">
+                    <div class="log-entry">Waiting for events...</div>
                 </div>
             </div>
         </div>
 
         <footer>
-            <p>Unitree GO2 EDU + Teachable Machine | Made for High School Students</p>
-            <p class="safety-notice">⚠️ Safety: Always supervise the robot. Emergency stop is always available.</p>
+            <p>Unitree GO2 EDU + Teachable Machine</p>
         </footer>
     </div>
 
     <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/upload_page.js') }}"></script>
 </body>
 </html>

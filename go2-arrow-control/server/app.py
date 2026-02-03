@@ -32,6 +32,13 @@ ch.setLevel(logging.INFO)
 ch.setFormatter(logging.Formatter('%(asctime)s [CONTROL] %(levelname)s: %(message)s'))
 control_logger.addHandler(ch)
 
+# Add file handler for control logs
+control_log_path = os.path.join(logs_dir, 'control.log')
+fh = logging.FileHandler(control_log_path)
+fh.setLevel(logging.INFO)
+fh.setFormatter(logging.Formatter('%(asctime)s [CONTROL] %(levelname)s: %(message)s'))
+control_logger.addHandler(fh)
+
 
 def get_network_info():
     """Return a short summary of network addresses available on this host."""
@@ -132,8 +139,63 @@ def allowed_file(filename):
 
 @app.route('/')
 def index():
-    """Serve main page"""
+    """Serve setup/upload page"""
     return render_template('index.html')
+
+
+@app.route('/control')
+def control_page():
+    """Serve control page"""
+    if not session.get('authenticated'):
+        return redirect(url_for('index', error='Authentication required'))
+    return render_template('control.html')
+
+
+@app.route('/docs')
+def documentation():
+    """Serve documentation page"""
+    return render_template('documentation.html')
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    """Simple password login"""
+    password = request.form.get('password', '')
+    correct_password = os.environ.get('CONTROL_PASSWORD', 'go2demo')
+    
+    if password == correct_password:
+        session['authenticated'] = True
+        return redirect(url_for('control_page'))
+    else:
+        return redirect(url_for('index', error='Invalid Password'))
+
+
+@app.route('/logout')
+def logout():
+    session.pop('authenticated', None)
+    return redirect(url_for('index'))
+
+
+@app.route('/logs')
+def get_logs():
+    """Get filtered control logs (Uploads and Commands only)"""
+    try:
+        control_log_path = os.path.join(logs_dir, 'control.log')
+        if not os.path.exists(control_log_path):
+            return jsonify({'logs': []})
+            
+        # Read file and filter
+        filtered_logs = []
+        with open(control_log_path, 'r') as f:
+            for line in f:
+                # Filter for useful events
+                if any(x in line for x in ['Uploaded model:', 'Command:', 'Moving', 'Turning', 'Rotating', 'Idle', 'Prediction']):
+                    filtered_logs.append(line)
+        
+        # Return last 50 matches
+        return jsonify({'logs': filtered_logs[-50:]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/predict_frame', methods=['POST'])
@@ -282,6 +344,9 @@ def upload_model():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
         file.save(filepath)
+        
+        control_logger.info("Uploaded model: %s (%s)", model_name, filename)
+
         # Create a default labels file if none provided by the user.
         labels_path = filepath.replace('.tflite', '_labels.txt')
         if not os.path.exists(labels_path):
@@ -316,6 +381,7 @@ def list_models():
                     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                     models.append({
                         'filename': filename,
+                        'name': filename.split('_')[0] if '_' in filename else filename,
                         'size': os.path.getsize(filepath),
                         'modified': datetime.fromtimestamp(os.path.getmtime(filepath)).isoformat()
                     })
@@ -332,106 +398,30 @@ def load_model():
     """Load a specific model for inference"""
     global inference_engine, current_model_name
     
-    data = request.get_json()
-    filename = data.get('filename')
-    
+    filename = request.form.get('filename')
     if not filename:
         return jsonify({'error': 'Filename is required'}), 400
-    
+        
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    
     if not os.path.exists(filepath):
         return jsonify({'error': 'Model file not found'}), 404
-    
+        
     try:
-        # Initialize inference engine if not exists
         if inference_engine is None:
             inference_engine = ModelInference()
-        
-        # Load the model
+            
         inference_engine.load_model(filepath)
         current_model_name = filename
         
-        response = {
-            'success': True,
-            'message': f'Model {filename} loaded successfully',
-            'classes': inference_engine.get_classes()
-        }
-
-        # If there is a class/label mismatch, include a warning for the UI
-        if hasattr(inference_engine, 'class_mismatch') and inference_engine.class_mismatch:
-            response['warning'] = True
-            response['warning_message'] = inference_engine.mismatch_message
-
-        return jsonify(response)
+        control_logger.info("Loaded model: %s", filename)
         
+        return jsonify({'success': True, 'message': f"Loaded model: {filename}"})
     except Exception as e:
+        control_logger.error("Failed to load model: %s", e)
         return jsonify({'error': str(e)}), 500
 
 
 
-@app.route('/teacher', methods=['GET', 'POST'])
-def teacher_login():
-    """Teacher login page (GET) and login handler (POST).
-    Password is read from env var `TEACHER_PASSWORD` (default: 'teacher').
-    """
-    if request.method == 'GET':
-        return render_template('teacher_login.html')
-
-    # POST: attempt login
-    password = request.form.get('password', '')
-    expected = os.environ.get('TEACHER_PASSWORD', 'teacher')
-    if password == expected:
-        session['teacher_authenticated'] = True
-        return redirect(url_for('teacher_dashboard'))
-    else:
-        return render_template('teacher_login.html', error='Invalid password')
-
-
-@app.route('/teacher/dashboard', methods=['GET'])
-def teacher_dashboard():
-    if not session.get('teacher_authenticated'):
-        return redirect(url_for('teacher_login'))
-
-    # Provide current settings to the teacher dashboard
-    current = {
-        'confidence_threshold': settings.get('confidence_threshold'),
-        'max_speed': settings.get('max_speed'),
-        'command_interval': settings.get('command_interval', 0.5),
-        'buffer_size': settings.get('buffer_size', 10),
-        'consensus_required': settings.get('consensus_required', 7)
-    }
-
-    return render_template('teacher_dashboard.html', settings=current)
-
-
-@app.route('/teacher/update_settings', methods=['POST'])
-def teacher_update_settings():
-    if not session.get('teacher_authenticated'):
-        return jsonify({'error': 'Unauthorized'}), 401
-
-    data = request.form or request.get_json() or {}
-    try:
-        if 'confidence_threshold' in data:
-            settings['confidence_threshold'] = float(data.get('confidence_threshold'))
-        if 'max_speed' in data:
-            settings['max_speed'] = float(data.get('max_speed'))
-        if 'command_interval' in data:
-            settings['command_interval'] = float(data.get('command_interval'))
-        if 'buffer_size' in data:
-            settings['buffer_size'] = int(data.get('buffer_size'))
-        if 'consensus_required' in data:
-            settings['consensus_required'] = int(data.get('consensus_required'))
-
-        return jsonify({'success': True, 'settings': settings})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
-
-
-@app.route('/teacher/logout')
-def teacher_logout():
-    session.pop('teacher_authenticated', None)
-    return redirect(url_for('index'))
 
 @app.route('/delete_model', methods=['POST'])
 def delete_model():
@@ -523,11 +513,22 @@ def manage_settings():
     if request.method == 'POST':
         data = request.get_json()
         
+        # Core parameters
         if 'confidence_threshold' in data:
             settings['confidence_threshold'] = float(data['confidence_threshold'])
         
         if 'max_speed' in data:
             settings['max_speed'] = float(data['max_speed'])
+
+        # Advanced parameters
+        if 'command_interval' in data:
+            settings['command_interval'] = float(data['command_interval'])
+            
+        if 'buffer_size' in data:
+            settings['buffer_size'] = int(data['buffer_size'])
+            
+        if 'consensus_required' in data:
+            settings['consensus_required'] = int(data['consensus_required'])
         
         return jsonify({'success': True, 'settings': settings})
     

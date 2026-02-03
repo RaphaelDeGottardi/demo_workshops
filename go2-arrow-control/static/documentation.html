@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GO2 Arrow Control - Documentation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .doc-section {
+            background: #2a2a2a;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            color: #eee;
+        }
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .param-table th, .param-table td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #444;
+        }
+        .param-table th {
+            color: #4CAF50;
+        }
+        strong {
+            color: #4fc3f7; /* Bright Blue for readability */
+        }
+        code {
+            background: #111;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📚 System Documentation</h1>
+            <a href="/" class="btn btn-small" style="float:right;margin-top:-30px;">🏠 Back to Home</a>
+        </header>
+
+        <div class="main-content">
+            <div class="doc-section">
+                <h2>1. System Overview</h2>
+                <p>
+                    The GO2 Arrow Control System allows you to control a Unitree GO2 robot using hand-drawn arrows recognized by a computer vision model.
+                    The workflow consists of:
+                </p>
+                <ol>
+                    <li><strong>Training:</strong> Use Google Teachable Machine to train a model to recognize arrows.</li>
+                    <li><strong>Uploading:</strong> Upload the trained `.tflite` model to this system.</li>
+                    <li><strong>Controlling:</strong> Log in to the control dashboard, select your model, and drive the robot.</li>
+                </ol>
+            </div>
+
+            <div class="doc-section">
+                <h2>2. Training Guide</h2>
+                <p>
+                    Your model must be trained to recognize exactly these 5 classes (names must match exactly):
+                </p>
+                <ul style="margin-left: 20px;">
+                    <li><code>Forward</code> - Robot moves forward</li>
+                    <li><code>Right</code> - Robot turns right (yaw)</li>
+                    <li><code>Left</code> - Robot turns left (yaw)</li>
+                    <li><code>Rotate</code> - Robot spins in place (or moves backward depending on config)</li>
+                    <li><code>Idle</code> - Robot stands still (Default state)</li>
+                </ul>
+            </div>
+
+            <div class="doc-section">
+                <h2>3. Control Parameters</h2>
+                <p>These settings are available in the Control Dashboard to fine-tune performance:</p>
+                
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>Parameter</th>
+                            <th>Range</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Confidence Threshold</strong></td>
+                            <td>50% - 95%</td>
+                            <td>
+                                Minimum certainty required for a prediction to be accepted. 
+                                <br><em>Higher = Fewer accidents, harder to trigger. Lower = More responsive, prone to noise.</em>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Max Speed</strong></td>
+                            <td>0.1 - 0.5 m/s</td>
+                            <td>
+                                Limits the top speed of walking and turning.
+                                <br><em>Start low (0.1) for testing. Increase only when confident.</em>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>command_interval</strong></td>
+                            <td>Advanced Settings</td>
+                            <td>
+                                Minimum time interval (in seconds) between commands sent to the robot.
+                                Higher value = Slower reaction but smoother motion.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>buffer_size</strong></td>
+                            <td>Advanced Settings</td>
+                            <td>
+                                Size of the sliding window used for prediction smoothing.
+                                Larger buffer = More stable but more lag.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>consensus_required</strong></td>
+                            <td>Advanced Settings</td>
+                            <td>
+                                Number of matching predictions required within the buffer to trigger a move.
+                                Prevents "flickering" commands.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="doc-section">
+                <h2>4. Safety Features</h2>
+                <ul>
+                    <li><strong>Dead Man's Switch:</strong> The robot automatically stops if no command is received for 2 seconds.</li>
+                    <li><strong>Inference Stop:</strong> Clicking "Stop Control" immediately halts the robot.</li>
+                    <li><strong>Emergency Stop:</strong> The Red "EMERGENCY STOP" button cuts all movement commands instantly.</li>
+                </ul>
+            </div>
+        </div>
+        
+        <footer>
+            <p>Unitree GO2 EDU + Teachable Machine</p>
+        </footer>
+    </div>
+</body>
+</html>
