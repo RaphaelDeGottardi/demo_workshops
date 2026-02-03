@@ -15,6 +15,7 @@ import cv2
 import json
 import os
 import logging
+import threading
 
 try:
     import tflite_runtime.interpreter as tflite
@@ -34,6 +35,7 @@ class ModelInference:
         self.class_mismatch = False
         self.mismatch_message = None
         self.logger = logging.getLogger('control')
+        self.lock = threading.Lock()
 
     def load_model(self, model_path):
         """Load a TFLite model"""
@@ -148,9 +150,10 @@ class ModelInference:
 
         try:
             input_data = self.preprocess_image(image)
-            self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
-            self.interpreter.invoke()
-            output_data = self.interpreter.get_tensor(self.output_details[0]['index'])
+            with self.lock:
+                self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
+                self.interpreter.invoke()
+                output_data = self.interpreter.get_tensor(self.output_details[0]['index']).copy()
 
             predictions = output_data[0]
             predicted_index = int(np.argmax(predictions))
