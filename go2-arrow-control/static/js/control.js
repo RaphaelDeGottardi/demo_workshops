@@ -52,8 +52,29 @@ function initializeControls() {
     speedSlider.addEventListener('input', (e) => document.getElementById('speed-value').textContent = e.target.value);
     
     if(rateSlider) rateSlider.addEventListener('input', (e) => document.getElementById('rate-value').textContent = e.target.value);
-    if(bufSlider) bufSlider.addEventListener('input', (e) => document.getElementById('buffer-value').textContent = e.target.value);
-    if(conSlider) conSlider.addEventListener('input', (e) => document.getElementById('consensus-value').textContent = e.target.value);
+    
+    if(bufSlider && conSlider) {
+        // When buffer size changes
+        bufSlider.addEventListener('input', (e) => {
+            const bufVal = parseInt(e.target.value);
+            document.getElementById('buffer-value').textContent = bufVal;
+            
+            // Update Consensus Max
+            conSlider.max = bufVal;
+            
+            // If current consensus is greater than new buffer, or just to be safe, clamp it
+            if (parseInt(conSlider.value) > bufVal) {
+                conSlider.value = bufVal;
+            }
+            // Always update the display text for consensus to match the (possibly clamped) value
+            document.getElementById('consensus-value').textContent = conSlider.value;
+        });
+
+        // When consensus changes directly
+        conSlider.addEventListener('input', (e) => {
+             document.getElementById('consensus-value').textContent = e.target.value;
+        });
+    }
 }
 
 // --- Model Logic ---
