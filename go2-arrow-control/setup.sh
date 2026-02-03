@@ -91,7 +91,7 @@ echo "------------------------------"
 ip addr show | grep "^[0-9]" | cut -d: -f2 | tr -d ' '
 echo ""
 echo "⚠ Update the network interface in server/robot_controller.py"
-echo "  Current setting: enp2s0 (line ~37)"
+echo "  Current setting: enp2s0 (line ~53)"
 echo ""
 
 # Check if running on Jetson

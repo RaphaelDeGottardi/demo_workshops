@@ -8,6 +8,8 @@ Control your Unitree GO2 EDU robot using hand-drawn arrows and Google Teachable 
 
 This system allows high school students to train their own machine learning models using Teachable Machine to control a Unitree GO2 robot. Students draw arrows on paper (Forward, Right, Left, Rotate), train a model to recognize them, and then upload the model to control the robot in real-time!
 
+**Need to connect remotely?** See [SETUP_ACCESS.md](SETUP_ACCESS.md) for instructions on connecting from other devices.
+
 ## 🏗️ System Architecture
 
 ```
@@ -45,17 +47,10 @@ git clone <your-repo-url>
 cd go2-arrow-control
 ```
 
-### 2. Install System Dependencies
+### 3. run the setup script
 
-```bash
-sudo apt-get update
-sudo apt-get install -y python3-pip python3-opencv
 ```
-
-### 3. Install Python Dependencies
-
-```bash
-pip3 install -r requirements.txt
+./setup.sh
 ```
 
 ### 4. Install Unitree SDK
