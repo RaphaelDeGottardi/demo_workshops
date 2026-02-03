@@ -86,6 +86,51 @@ header h1 {
     border-radius: 12px;
 }
 
+.help-text {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    display: block;
+}
+
+.doc-section {
+    background: var(--bg-secondary);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    margin-top: 20px;
+}
+
+.doc-section h4 {
+    margin-bottom: 15px;
+    color: var(--primary-color);
+}
+
+.doc-section ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.doc-section li {
+    margin-bottom: 10px;
+}
+
+.doc-section strong {
+    color: var(--text-primary);
+}
+
+.alert-danger {
+    background-color: #fef2f2;
+    border-left: 4px solid var(--danger-color);
+    padding: 15px;
+    margin: 15px 0;
+}
+
+.alert-danger h5 {
+    color: var(--danger-color);
+    margin-top: 0;
+}
+
 /* Main Content */
 .main-content {
     display: grid;
