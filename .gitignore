@@ -1,3 +1,4 @@
-go2-arrow-control/logs/
+go2-arrow-control/logs/*
 go2-arrow-control/server/
 uploads/
+go2-arrow-control/logs/http.log

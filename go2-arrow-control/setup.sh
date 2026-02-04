@@ -44,7 +44,8 @@ if command -v conda >/dev/null 2>&1; then
         echo "⚠ Failed to activate $ENV_NAME; continuing with current shell environment"
     fi
 else
-    echo "⚠ conda not found. Continuing with system Python/pip"
+    echo "⚠ conda not found. Please install Conda"
+    exit 1
 fi
 
 # Check Python version
@@ -58,16 +59,6 @@ else
 fi
 echo ""
 
-# Check if pip is installed
-echo "Checking pip..."
-pip3 --version
-if [ $? -eq 0 ]; then
-    echo "✓ pip3 found"
-else
-    echo "✗ pip3 not found. Installing..."
-    sudo apt-get install -y python3-pip
-fi
-echo ""
 
 # Check for Unitree SDK
 echo "Checking for Unitree SDK..."

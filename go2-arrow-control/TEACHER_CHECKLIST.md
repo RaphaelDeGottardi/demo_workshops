@@ -5,24 +5,23 @@
 ### 1. Hardware Setup
 - [ ] Unitree GO2 robot fully charged
 - [ ] Jetson Orin Nano powered and booted
-- [ ] USB webcam connected to Jetson
-- [ ] Same webcam will be used for student training
 - [ ] Robot has clear 10ft x 10ft space for operation
 - [ ] Emergency stop accessible
 - [ ] Power outlets available for Jetson
 
 ### 2. Software Installation
-- [ ] Clone repository to Jetson: `git clone <repo-url>`
-- [ ] Run setup script: `./setup.sh`
-- [ ] Install Unitree SDK (follow official documentation)
-- [ ] Update network interface in `server/robot_controller.py`
+- [ ] Clone repository to Jetson: follow JETSON_SETUP_GUIDE.md
+- [ ] Connect to hotspot and log in via ssh
+- If connected to robot: 
+  - [ ] Install Unitree SDK (not required for mock)
+  - [ ] Update network interface in `server/robot_controller.py`
 - [ ] Test system: `python3 test_system.py`
-- [ ] All tests pass (or acceptable failures noted)
+- [ ] start the server by running `server/app.py`
 
 ### 3. Network Configuration
 - [ ] WiFi hotspot configured on Jetson
   - SSID: `GO2-Robot` (or your choice)
-  - Password: `robotics123` (or your choice)
+  - Password: `go2demo123` (or your choice)
   - IP address: `192.168.1.1` or note actual IP
 - [ ] Test connection from student device
 - [ ] Access web interface successfully
