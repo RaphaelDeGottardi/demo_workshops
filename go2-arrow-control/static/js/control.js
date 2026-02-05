@@ -3,15 +3,19 @@
 // State
 let currentState = {
     inferenceActive: false,
-    modelLoaded: false
+    modelLoaded: false,
+    isPilot: false,
+    viewMode: 'local' // 'local' or 'pilot'
 };
 
 let inferenceInterval = null;
+let pilotFeedInterval = null;
 const INFERENCE_FPS = 2;
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeWebcam();
     initializeControls();
+    initializeUploadForm();
     loadModelsList();
     loadSettings();
     startStatusPolling();
@@ -41,6 +45,12 @@ function initializeControls() {
     document.getElementById('emergency-btn').addEventListener('click', emergencyStop);
     document.getElementById('save-settings-btn').addEventListener('click', saveSettings);
     
+    document.getElementById('take-control-btn').addEventListener('click', takeControl);
+    document.getElementById('relinquish-btn').addEventListener('click', relinquishControl);
+    
+    document.getElementById('show-local-btn').addEventListener('click', () => setViewMode('local'));
+    document.getElementById('show-pilot-btn').addEventListener('click', () => setViewMode('pilot'));
+    
     // Sliders
     const confSlider = document.getElementById('confidence-threshold');
     const speedSlider = document.getElementById('max-speed');
@@ -59,22 +69,127 @@ function initializeControls() {
             const bufVal = parseInt(e.target.value);
             document.getElementById('buffer-value').textContent = bufVal;
             
-            // Update Consensus Max
+            // Adjust Consensus limits
             conSlider.max = bufVal;
+            const minConsensus = Math.ceil(bufVal / 2);
+            conSlider.min = minConsensus;
             
-            // If current consensus is greater than new buffer, or just to be safe, clamp it
+            // Clamp current consensus to new limits
             if (parseInt(conSlider.value) > bufVal) {
                 conSlider.value = bufVal;
+            } else if (parseInt(conSlider.value) < minConsensus) {
+                conSlider.value = minConsensus;
             }
-            // Always update the display text for consensus to match the (possibly clamped) value
             document.getElementById('consensus-value').textContent = conSlider.value;
         });
 
         // When consensus changes directly
         conSlider.addEventListener('input', (e) => {
+             const bufVal = parseInt(bufSlider.value);
+             const minConsensus = Math.ceil(bufVal / 2);
+             
+             if (parseInt(e.target.value) < minConsensus) {
+                 e.target.value = minConsensus;
+             }
              document.getElementById('consensus-value').textContent = e.target.value;
         });
     }
+}
+
+// --- View Mode & Pilot Feed ---
+
+function setViewMode(mode) {
+    currentState.viewMode = mode;
+    const localBtn = document.getElementById('show-local-btn');
+    const pilotBtn = document.getElementById('show-pilot-btn');
+    const video = document.getElementById('webcam');
+    const pilotImg = document.getElementById('pilot-feed');
+
+    if (mode === 'local') {
+        localBtn.classList.add('active');
+        localBtn.style.background = '#444';
+        pilotBtn.classList.remove('active');
+        pilotBtn.style.background = 'transparent';
+        video.style.display = 'block';
+        pilotImg.style.display = 'none';
+        
+        if (pilotFeedInterval) {
+            clearInterval(pilotFeedInterval);
+            pilotFeedInterval = null;
+        }
+    } else {
+        pilotBtn.classList.add('active');
+        pilotBtn.style.background = '#444';
+        localBtn.classList.remove('active');
+        localBtn.style.background = 'transparent';
+        video.style.display = 'none';
+        pilotImg.style.display = 'block';
+        
+        // Start polling pilot feed
+        if (!pilotFeedInterval) {
+            pilotFeedInterval = setInterval(fetchPilotFrame, 1000 / INFERENCE_FPS);
+        }
+    }
+}
+
+async function fetchPilotFrame() {
+    if (currentState.isPilot && currentState.viewMode === 'pilot') {
+        // If we are pilot, "pilot view" is just our own local frames anyway
+        // or we could just show the local video.
+        setViewMode('local'); 
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/pilot_frame');
+        const data = await res.json();
+        if (data.image) {
+            document.getElementById('pilot-feed').src = data.image;
+        }
+    } catch (e) {
+        console.error('Failed to fetch pilot frame', e);
+    }
+}
+
+// --- Upload Logic ---
+
+function initializeUploadForm() {
+    const form = document.getElementById('upload-form');
+    if (!form) return;
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nameInput = document.getElementById('model-name');
+        const fileInput = document.getElementById('model-file');
+        const submitBtn = form.querySelector('button[type="submit"]');
+
+        const formData = new FormData();
+        formData.append('model_name', nameInput.value);
+        formData.append('model', fileInput.files[0]);
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Uploading...';
+
+        try {
+            const res = await fetch('/upload_model', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('Model uploaded!', 'success');
+                form.reset();
+                loadModelsList();
+            } else {
+                showToast(data.error, 'error');
+            }
+        } catch (e) {
+            showToast('Upload failed', 'error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Upload Model';
+        }
+    });
 }
 
 // --- Model Logic ---
@@ -166,15 +281,15 @@ function startInference() {
     });
 }
 
-function stopInference() {
+function stopInference(notifyServer = true) {
     currentState.inferenceActive = false;
     if (inferenceInterval) clearInterval(inferenceInterval);
     updateButtons();
     updateDisplay('Stopped', 'warning');
     
-    fetch('/stop_inference', {
-        method: 'POST'
-    });
+    if (notifyServer) {
+        fetch('/stop_inference', { method: 'POST' });
+    }
 }
 
 async function emergencyStop() {
@@ -184,6 +299,11 @@ async function emergencyStop() {
 }
 
 async function sendFrame() {
+    if (!currentState.isPilot) {
+        stopInference(false);
+        return;
+    }
+
     const video = document.getElementById('webcam');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
@@ -260,6 +380,13 @@ function loadSettings() {
                 if (data.buffer_size && document.getElementById('buffer-size')) {
                     document.getElementById('buffer-size').value = data.buffer_size;
                     document.getElementById('buffer-value').textContent = data.buffer_size;
+                    
+                    // Update consensus limits based on loaded buffer size
+                    const conSlider = document.getElementById('consensus-req');
+                    if (conSlider) {
+                        conSlider.max = data.buffer_size;
+                        conSlider.min = Math.ceil(data.buffer_size / 2);
+                    }
                 }
                 
                 if (data.consensus_required && document.getElementById('consensus-req')) {
@@ -313,8 +440,12 @@ function startStatusPolling() {
             
             // Sync local state if changed externally
             if (data.inference_enabled !== currentState.inferenceActive) {
-                if (data.inference_enabled) startInference(); // Basic sync
-                else stopInference();
+                if (data.inference_enabled && currentState.isPilot) {
+                    // Only start if we are pilot and it was enabled elsewhere? 
+                    // Unlikely but keep it safe.
+                } else if (!data.inference_enabled) {
+                    stopInference(false); // Stop local loop, don't tell server back
+                }
             }
             
         } catch (e) {}
@@ -324,8 +455,21 @@ function startStatusPolling() {
 // --- Helpers ---
 
 function updateButtons() {
-    document.getElementById('start-btn').disabled = !currentState.modelLoaded || currentState.inferenceActive;
-    document.getElementById('stop-btn').disabled = !currentState.inferenceActive;
+    const isPilot = currentState.isPilot;
+    
+    document.getElementById('start-btn').disabled = !currentState.modelLoaded || currentState.inferenceActive || !isPilot;
+    document.getElementById('stop-btn').disabled = !currentState.inferenceActive || !isPilot;
+    document.getElementById('load-model-btn').disabled = !isPilot;
+    document.getElementById('save-settings-btn').disabled = !isPilot;
+    
+    // Also disable configuration inputs if not pilot, but ALLOW uploading models
+    const inputs = document.querySelectorAll('.model-panel input, .model-panel select');
+    inputs.forEach(input => {
+        // Only disable if NOT part of the upload form
+        if (!input.closest('#upload-form')) {
+            input.disabled = !isPilot;
+        }
+    });
 }
 
 function updateDisplay(text, type) {
@@ -347,3 +491,79 @@ function showToast(msg, type='info') {
     toast.className = `toast show ${type}`;
     setTimeout(() => toast.className = 'toast', 3000);
 }
+
+// --- Pilot Management ---
+
+async function pollPilotStatus() {
+    try {
+        const res = await fetch('/api/control_status');
+        const data = await res.json();
+        
+        currentState.isPilot = data.is_pilot;
+        
+        const pilotStatus = document.getElementById('pilot-status');
+        const takeBtn = document.getElementById('take-control-btn');
+        const relBtn = document.getElementById('relinquish-btn');
+        const pilotMsg = document.getElementById('pilot-message');
+        
+        if (data.system_locked) {
+            pilotStatus.textContent = 'SYSTEM LOCKED';
+            pilotStatus.className = 'status-value error';
+            takeBtn.style.display = 'none';
+            relBtn.style.display = 'none';
+            pilotMsg.textContent = 'The teacher has locked the system.';
+            currentState.isPilot = false; // Force false if locked
+        } else if (data.current_pilot) {
+            if (data.is_pilot) {
+                pilotStatus.textContent = 'YOU';
+                pilotStatus.className = 'status-value connected';
+                takeBtn.style.display = 'none';
+                relBtn.style.display = 'inline-block';
+                pilotMsg.textContent = 'You have control of the robot.';
+            } else {
+                pilotStatus.textContent = 'Another Student';
+                pilotStatus.className = 'status-value warning';
+                takeBtn.style.display = 'none';
+                relBtn.style.display = 'none';
+                pilotMsg.textContent = 'Someone else is driving.';
+            }
+        } else {
+            pilotStatus.textContent = 'Available';
+            pilotStatus.className = 'status-value disconnected';
+            takeBtn.style.display = 'inline-block';
+            relBtn.style.display = 'none';
+            pilotMsg.textContent = 'Nobody is driving. Take control to start!';
+        }
+        
+        updateButtons();
+    } catch (e) {
+        console.error('Pilot poll failed', e);
+    }
+}
+
+async function takeControl() {
+    try {
+        const res = await fetch('/api/take_control', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Control acquired!', 'success');
+            pollPilotStatus();
+        } else {
+            showToast(data.message || 'Could not take control', 'warning');
+        }
+    } catch (e) {
+        showToast('Server error', 'error');
+    }
+}
+
+async function relinquishControl() {
+    try {
+        await fetch('/api/relinquish_control', { method: 'POST' });
+        showToast('Control released');
+        pollPilotStatus();
+    } catch (e) {}
+}
+
+// Start polling
+setInterval(pollPilotStatus, 2000);
+pollPilotStatus();

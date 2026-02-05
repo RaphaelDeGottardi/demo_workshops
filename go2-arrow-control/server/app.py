@@ -6,6 +6,7 @@ Teachable Machine model upload and robot control system
 import os
 import time
 import json
+import uuid
 from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
 from werkzeug.utils import secure_filename
 import base64
@@ -94,7 +95,8 @@ from robot_controller import GO2Controller
 app = Flask(__name__, static_folder='../static', template_folder='../static')
 
 # Secret for teacher session (override with env var TEACHER_PASSWORD or TEACHER_SECRET)
-app.secret_key = os.environ.get('TEACHER_SECRET', os.environ.get('TEACHER_PASSWORD', 'change_this_teacher_password'))
+app.secret_key = os.environ.get('TEACHER_SECRET', os.environ.get('TEACHER_PASSWORD', 'teacher_secret_key'))
+TEACHER_PASSWORD = os.environ.get('TEACHER_PASSWORD', 'teacher123')
 
 # Configuration
 UPLOAD_FOLDER = 'uploads/models'
@@ -115,40 +117,71 @@ last_command_time = 0
 COMMAND_TIMEOUT = 2.0  # Stop if no detection for 2 seconds
 last_command_sent_time = 0
 
+# Concurrency & Pilot control
+current_pilot = None  # Stores the session user_id of the person currently in control
+pilot_lock = threading.Lock()
+pilot_last_active = 0 # To detect if a pilot has disconnected
+system_locked = False # Teacher can lock the system to prevent any control
+
 # Prediction buffering for consensus
 PREDICTION_BUFFER = None
 PREDICTION_BUFFER_LOCK = threading.Lock()
 LAST_SENT_COMMAND_NAME = None
+LAST_PILOT_FRAME = None # Stores the last frame sent by the pilot for others to see
 
 # Settings
 settings = {
-    'confidence_threshold': 0.80,
-    'max_speed': 0.3,  # Start slow for safety
+    'confidence_threshold': 0.65,
+    'max_speed': 0.3,
     'inference_enabled': False
 }
 
 # Command rate and consensus settings
-settings.setdefault('command_interval', 1.0)  # seconds between commands (slower default)
-settings.setdefault('buffer_size', 10)
-settings.setdefault('consensus_required', 7)
+settings.setdefault('command_interval', 0.2)
+settings.setdefault('buffer_size', 3)
+settings.setdefault('consensus_required', 2)
+
+
+def is_current_pilot():
+    """Helper to check if the current user is the pilot"""
+    global current_pilot
+    user_id = session.get('user_id')
+    if not user_id:
+        return False
+    
+    with pilot_lock:
+        return current_pilot is not None and current_pilot == user_id
+
+
+def stop_robot_and_inference():
+    """Helper to stop both inference and the robot movement"""
+    global robot_controller
+    settings['inference_enabled'] = False
+    if robot_controller and robot_controller.connected:
+        robot_controller.stop()
+    control_logger.info("Inference stopped and robot idling.")
 
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+@app.before_request
+def ensure_user_id():
+    if 'user_id' not in session:
+        session['user_id'] = str(uuid.uuid4())
+
+
 @app.route('/')
 def index():
-    """Serve setup/upload page"""
-    return render_template('index.html')
+    """Serve control page as the landing page"""
+    return render_template('control.html')
 
 
 @app.route('/control')
 def control_page():
-    """Serve control page"""
-    if not session.get('authenticated'):
-        return redirect(url_for('index', error='Authentication required'))
-    return render_template('control.html')
+    """Redirect to home"""
+    return redirect(url_for('index'))
 
 
 @app.route('/docs')
@@ -157,23 +190,128 @@ def documentation():
     return render_template('documentation.html')
 
 
-@app.route('/login', methods=['POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Simple password login"""
+    """Teacher login only"""
+    if request.method == 'GET':
+        return render_template('login.html') # Need to create this simple login page
+
     password = request.form.get('password', '')
-    correct_password = os.environ.get('CONTROL_PASSWORD', 'go2demo')
-    
-    if password == correct_password:
-        session['authenticated'] = True
-        return redirect(url_for('control_page'))
+    if password == TEACHER_PASSWORD:
+        session['is_teacher'] = True
+        return redirect(url_for('teacher_page'))
     else:
-        return redirect(url_for('index', error='Invalid Password'))
+        return redirect(url_for('login', error='Invalid Teacher Password'))
 
 
 @app.route('/logout')
 def logout():
     session.pop('authenticated', None)
+    session.pop('is_teacher', None)
     return redirect(url_for('index'))
+
+
+@app.route('/teacher')
+def teacher_page():
+    """Teacher management page"""
+    if not session.get('is_teacher'):
+        return redirect(url_for('login'))
+    return render_template('teacher.html')
+
+
+@app.route('/api/control_status', methods=['GET'])
+def control_status():
+    """Get current pilot status"""
+    global current_pilot, system_locked
+    
+    return jsonify({
+        'current_pilot': current_pilot,
+        'is_pilot': session.get('user_id') == current_pilot,
+        'user_id': session.get('user_id'),
+        'system_locked': system_locked
+    })
+
+
+@app.route('/api/take_control', methods=['POST'])
+def take_control():
+    """Attempt to take control of the robot"""
+    global current_pilot, system_locked
+    
+    if system_locked and not session.get('is_teacher'):
+        return jsonify({'success': False, 'message': 'System is currently locked by teacher'}), 403
+
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'No session ID'}), 400
+
+    with pilot_lock:
+        # Check if already controlled by someone else
+        if current_pilot and current_pilot != user_id:
+            return jsonify({'success': False, 'message': 'Robot is currently controlled by another student'}), 409
+            
+        current_pilot = user_id
+        control_logger.info(f"User {user_id} took control")
+        
+    return jsonify({'success': True, 'message': 'You now have control'})
+
+
+@app.route('/api/relinquish_control', methods=['POST'])
+def relinquish_control():
+    """Release control of the robot"""
+    global current_pilot
+    
+    user_id = session.get('user_id')
+    with pilot_lock:
+        if current_pilot == user_id:
+            current_pilot = None
+            stop_robot_and_inference()
+            control_logger.info(f"User {user_id} relinquished control")
+            
+    return jsonify({'success': True})
+
+
+@app.route('/api/teacher/reset_control', methods=['POST'])
+def teacher_reset_control():
+    """Teacher force-resets control"""
+    global current_pilot
+    if not session.get('is_teacher'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    with pilot_lock:
+        current_pilot = None
+        stop_robot_and_inference()
+        control_logger.info("Teacher reset control")
+        
+    return jsonify({'success': True})
+
+
+@app.route('/api/teacher/lock_system', methods=['POST'])
+def teacher_lock_system():
+    """Teacher locks the system"""
+    global system_locked, current_pilot
+    if not session.get('is_teacher'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    system_locked = data.get('locked', True)
+    
+    if system_locked:
+        with pilot_lock:
+            current_pilot = None  # Boot current pilot
+            stop_robot_and_inference()
+        control_logger.info("Teacher LOCKED the system")
+    else:
+        control_logger.info("Teacher UNLOCKED the system")
+        
+    return jsonify({'success': True, 'locked': system_locked})
+
+
+@app.route('/api/pilot_frame', methods=['GET'])
+def get_pilot_frame():
+    """Get the last frame sent by the current pilot"""
+    if LAST_PILOT_FRAME:
+        return jsonify({'image': LAST_PILOT_FRAME})
+    return jsonify({'image': None})
 
 
 @app.route('/logs')
@@ -205,13 +343,22 @@ def predict_frame():
     Expects: JSON with base64 encoded image
     Returns: JSON with prediction, confidence, and command
     """
-    global last_command_time
+    global last_command_time, pilot_last_active, LAST_PILOT_FRAME
+    
+    # Check if this user is the current pilot
+    if not is_current_pilot():
+        return jsonify({'error': 'Not the current pilot'}), 403
     
     try:
         data = request.get_json()
 
         if not data or 'image' not in data:
             return jsonify({'error': 'No image provided'}), 400
+
+        # Store as last pilot frame
+        global LAST_PILOT_FRAME, pilot_last_active
+        LAST_PILOT_FRAME = data['image'] # Already base64 encoded
+        pilot_last_active = time.time()
 
         # Decode base64 image
         image_data = data['image'].split(',')[1]  # Remove data:image/jpeg;base64, prefix
@@ -398,6 +545,9 @@ def load_model():
     """Load a specific model for inference"""
     global inference_engine, current_model_name
     
+    if not is_current_pilot():
+        return jsonify({'error': 'Not the current pilot'}), 403
+
     filename = request.form.get('filename')
     if not filename:
         return jsonify({'error': 'Filename is required'}), 400
@@ -462,6 +612,9 @@ def start_inference():
     """Start inference and robot control"""
     global robot_controller
     
+    if not is_current_pilot():
+        return jsonify({'error': 'Not the current pilot'}), 403
+
     if not inference_engine or not inference_engine.model_loaded:
         return jsonify({'error': 'No model loaded'}), 400
     
@@ -488,6 +641,9 @@ def start_inference():
 @app.route('/stop_inference', methods=['POST'])
 def stop_inference():
     """Stop inference and robot"""
+    if not is_current_pilot():
+        return jsonify({'error': 'Not the current pilot'}), 403
+
     settings['inference_enabled'] = False
     
     if robot_controller and robot_controller.connected:
@@ -499,6 +655,9 @@ def stop_inference():
 @app.route('/emergency_stop', methods=['POST'])
 def emergency_stop():
     """Emergency stop - immediately stop robot"""
+    if not is_current_pilot():
+        return jsonify({'error': 'Not the current pilot'}), 403
+
     settings['inference_enabled'] = False
     
     if robot_controller and robot_controller.connected:
@@ -511,6 +670,9 @@ def emergency_stop():
 def manage_settings():
     """Get or update settings"""
     if request.method == 'POST':
+        if not is_current_pilot():
+            return jsonify({'error': 'Not the current pilot'}), 403
+            
         data = request.get_json()
         
         # Core parameters
@@ -538,6 +700,17 @@ def manage_settings():
 @app.route('/status', methods=['GET'])
 def get_status():
     """Get system status"""
+    global last_command_time, robot_controller, LAST_SENT_COMMAND_NAME
+    
+    # Background safety check: if no command for a while, stop robot
+    now = time.time()
+    if last_command_time > 0 and (now - last_command_time > COMMAND_TIMEOUT):
+        if robot_controller and robot_controller.connected:
+            if LAST_SENT_COMMAND_NAME is not None and LAST_SENT_COMMAND_NAME.lower() != 'idle':
+                robot_controller.stop()
+                LAST_SENT_COMMAND_NAME = 'Idle'
+                control_logger.info("Safety timeout: Robot stopped due to inactivity")
+
     return jsonify({
         'inference_enabled': settings['inference_enabled'],
         'model_loaded': inference_engine is not None and inference_engine.model_loaded,

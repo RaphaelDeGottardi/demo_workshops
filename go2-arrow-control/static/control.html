@@ -9,8 +9,10 @@
 <body>
     <div class="container">
         <header>
-            <h1>🎮 GO2 Control Center</h1>
-            <a href="/logout" class="btn btn-warning" style="float:right;margin-top:-30px;">Logout</a>
+            <h1>🤖 GO2 Control Center</h1>
+            <div style="float:right; margin-top:-30px; display: flex; gap: 10px;">
+                <a href="/teacher" class="btn btn-secondary">Teacher Portal</a>
+            </div>
             <div class="status-bar">
                 <div class="status-item">
                     <span class="status-label">Model:</span>
@@ -20,15 +22,31 @@
                     <span class="status-label">Robot:</span>
                     <span id="robot-status" class="status-value">Disconnected</span>
                 </div>
+                <div class="status-item">
+                    <span class="status-label">Pilot:</span>
+                    <span id="pilot-status" class="status-value">Searching...</span>
+                </div>
+            </div>
+            <div id="pilot-controls" style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
+                <button id="take-control-btn" class="btn btn-primary">🎮 Take Control</button>
+                <button id="relinquish-btn" class="btn btn-warning" style="display: none;">🔓 Relinquish Control</button>
+                <span id="pilot-message" style="font-size: 0.9em; color: #aaa;"></span>
             </div>
         </header>
 
         <div class="main-content">
             <!-- Left Panel: Camera -->
             <div class="panel camera-panel">
-                <h2>📹 Camera Feed</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h2>📹 Camera Feed</h2>
+                    <div id="feed-toggle-container" class="toggle-group" style="display: flex; background: #333; border-radius: 5px; overflow: hidden;">
+                        <button id="show-local-btn" class="btn btn-small active" style="border-radius: 0; margin: 0; background: #444;">Your Cam</button>
+                        <button id="show-pilot-btn" class="btn btn-small" style="border-radius: 0; margin: 0; background: transparent;">Pilot View</button>
+                    </div>
+                </div>
                 <div class="camera-container">
                     <video id="webcam" autoplay playsinline></video>
+                    <img id="pilot-feed" style="display: none; width: 100%; height: auto; border-radius: 8px;" />
                     <canvas id="canvas" style="display: none;"></canvas>
                     <div class="camera-overlay">
                         <div id="prediction-display" class="prediction-display">
@@ -54,11 +72,27 @@
             <div class="panel model-panel">
                 <h2>⚙️ Configuration</h2>
                 
+                <!-- Model Upload -->
+                <div class="section">
+                    <h3>Upload New Model</h3>
+                    <form id="upload-form" style="background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 10px; border: 1px solid #e2e8f0;">
+                        <div class="form-group">
+                            <label for="model-name">Group Name:</label>
+                            <input type="text" id="model-name" placeholder="e.g. Team Alpha" required style="width: 100%; margin-bottom: 10px; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                        </div>
+                        <div class="form-group">
+                            <label for="model-file">.tflite file:</label>
+                            <input type="file" id="model-file" accept=".tflite" required style="width: 100%; margin-bottom: 15px;">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%">Upload Model</button>
+                    </form>
+                </div>
+
                 <!-- Model Selection -->
                 <div class="section">
                     <h3>1. Select Model</h3>
                     <div class="form-group">
-                        <select id="model-select" style="width: 100%; padding: 10px; margin-bottom: 10px; background: #333; color: white; border: 1px solid #555;">
+                        <select id="model-select" style="width: 100%; padding: 10px; margin-bottom: 10px; background: #fff; color: #333; border: 1px solid #ccc; border-radius: 4px;">
                             <option value="">-- Choose a Model --</option>
                         </select>
                         <button id="load-model-btn" class="btn btn-primary" style="width: 100%">
@@ -69,25 +103,23 @@
 
                 <!-- Settings -->
                 <div class="section">
-                    <h3>2. Parameters</h3>
-                    <div class="form-group">
-                        <label for="confidence-threshold">
-                            Confidence Threshold: <span id="confidence-value">80%</span>
-                        </label>
-                        <input type="range" id="confidence-threshold" min="50" max="95" value="80" step="5">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="max-speed">
-                            Max Speed: <span id="speed-value">0.3</span> (m/s)
-                        </label>
-                        <input type="range" id="max-speed" min="0.1" max="0.5" value="0.3" step="0.05">
-                    </div>
-
-                    <!-- Advanced Settings Toggle -->
                     <details>
-                        <summary style="cursor: pointer; margin-bottom: 10px; color: #888;">Advanced Settings</summary>
+                        <summary style="cursor: pointer; margin-bottom: 10px; color: #4a90e2; font-weight: bold;">⚙️ Adjust Parameters</summary>
                         
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label for="confidence-threshold">
+                                Confidence Threshold: <span id="confidence-value">65%</span>
+                            </label>
+                            <input type="range" id="confidence-threshold" min="30" max="95" value="65" step="5">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="max-speed">
+                                Max Speed: <span id="speed-value">0.3</span> (m/s)
+                            </label>
+                            <input type="range" id="max-speed" min="0.1" max="0.5" value="0.3" step="0.05">
+                        </div>
+
                         <div class="form-group">
                             <label for="command-rate">
                                 Command Interval: <span id="rate-value">0.2</span>s
@@ -97,22 +129,22 @@
 
                         <div class="form-group">
                             <label for="buffer-size">
-                                Buffer Size: <span id="buffer-value">5</span> frames
+                                Buffer Size: <span id="buffer-value">3</span> frames
                             </label>
-                            <input type="range" id="buffer-size" min="1" max="16" value="5" step="1">
+                            <input type="range" id="buffer-size" min="1" max="16" value="3" step="1">
                         </div>
 
                         <div class="form-group">
                             <label for="consensus-req">
-                                Consensus: <span id="consensus-value">3</span> frames
+                                Consensus: <span id="consensus-value">2</span> frames
                             </label>
-                            <input type="range" id="consensus-req" min="1" max="5" value="3" step="1">
+                            <input type="range" id="consensus-req" min="1" max="16" value="2" step="1">
                         </div>
+                        
+                        <button id="save-settings-btn" class="btn btn-secondary" style="width: 100%; margin-top: 10px;">
+                            Update Parameters
+                        </button>
                     </details>
-                    
-                    <button id="save-settings-btn" class="btn btn-secondary" style="width: 100%">
-                        Update Parameters
-                    </button>
                 </div>
                 
                 <div class="section">

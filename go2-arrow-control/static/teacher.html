@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GO2 Arrow Control - Teacher Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .teacher-panel {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 30px;
+            background: #2a2a2a;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .status-card {
+            background: #333;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4a90e2;
+        }
+        .pilot-info {
+            font-size: 1.2em;
+            margin: 10px 0;
+        }
+        .highlight { font-weight: bold; color: #4a90e2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>👨‍🏫 Teacher Dashboard</h1>
+            <div style="float: right; margin-top: -40px;">
+                <a href="/control" class="btn btn-primary">Go to Control Page</a>
+                <a href="/logout" class="btn btn-warning">Logout</a>
+            </div>
+        </header>
+
+        <div class="teacher-panel">
+            <div class="status-card">
+                <h2>Robot Pilot Status</h2>
+                <div class="pilot-info">
+                    Current Pilot: <span id="current-pilot-name" class="highlight">Unknown</span>
+                </div>
+                <div id="pilot-id-small" style="font-size: 0.8em; color: #888;"></div>
+                
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button onclick="resetControl()" class="btn btn-warning" style="flex: 1;">
+                        🔄 Reset Control
+                    </button>
+                    <button id="lock-btn" onclick="toggleLock()" class="btn btn-danger" style="flex: 1;">
+                        🔒 Lock System
+                    </button>
+                </div>
+            </div>
+
+            <div class="status-card" style="border-left-color: #e74c3c;">
+                <h2>System State</h2>
+                <div class="pilot-info">
+                    Access Status: <span id="system-lock-status" class="highlight">Unlocked</span>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>System Management</h3>
+                <p>Use this page to manage student access. If a student's session hangs or someone is hogging the robot, use the "Force Reset" button to allow others to take control.</p>
+            </div>
+            
+            <div class="section">
+                <h3>Instructions for Students</h3>
+                <ol>
+                    <li>Click <strong>"Take Control"</strong> to start driving.</li>
+                    <li>When finished, click <strong>"Relinquish Control"</strong> so the next group can go.</li>
+                    <li>Make sure to stop your model before handing over control.</li>
+                </ol>
+            </div>
+        </div>
+
+        <footer>
+            <p>Unitree GO2 EDU - Teacher Administration</p>
+        </footer>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        let isSystemLocked = false;
+
+        async function updateStatus() {
+            try {
+                const res = await fetch('/api/control_status');
+                const data = await res.json();
+                
+                const el = document.getElementById('current-pilot-name');
+                const idEl = document.getElementById('pilot-id-small');
+                const lockEl = document.getElementById('system-lock-status');
+                const lockBtn = document.getElementById('lock-btn');
+                
+                isSystemLocked = data.system_locked;
+                
+                if (data.current_pilot) {
+                    el.textContent = 'A Student';
+                    el.style.color = '#f59e0b';
+                    idEl.textContent = 'Session ID: ' + data.current_pilot;
+                } else {
+                    el.textContent = 'FREE / NO ONE';
+                    el.style.color = '#10b981';
+                    idEl.textContent = '';
+                }
+
+                if (isSystemLocked) {
+                    lockEl.textContent = 'LOCKED';
+                    lockEl.style.color = '#e74c3c';
+                    lockBtn.textContent = '🔓 Unlock System';
+                    lockBtn.className = 'btn btn-success';
+                } else {
+                    lockEl.textContent = 'OPEN';
+                    lockEl.style.color = '#10b981';
+                    lockBtn.textContent = '🔒 Lock System';
+                    lockBtn.className = 'btn btn-danger';
+                }
+            } catch (e) {}
+        }
+
+        async function resetControl() {
+            if (!confirm('Are you sure you want to evict the current pilot?')) return;
+            
+            try {
+                const res = await fetch('/api/teacher/reset_control', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Control reset successfully', 'success');
+                    updateStatus();
+                }
+            } catch (e) {
+                showToast('Failed to reset control', 'error');
+            }
+        }
+
+        async function toggleLock() {
+            const newState = !isSystemLocked;
+            try {
+                const res = await fetch('/api/teacher/lock_system', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ locked: newState })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(newState ? 'System Locked' : 'System Unlocked', newState ? 'error' : 'success');
+                    updateStatus();
+                }
+            } catch (e) {
+                showToast('Action failed', 'error');
+            }
+        }
+
+        function showToast(msg, type='info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = `toast show ${type}`;
+            setTimeout(() => toast.className = 'toast', 3000);
+        }
+
+        setInterval(updateStatus, 2000);
+        updateStatus();
+    </script>
+</body>
+</html>
