@@ -115,10 +115,9 @@ This guide covers setting up a fresh Jetson Orin for the GO2 Arrow Control syste
     # Set Security (WPA2) and Password
     sudo nmcli con modify Hotspot wifi-sec.key-mgmt wpa-psk wifi-sec.psk "go2demo123"
 
-    # Set a Static IP (Recommended to avoid conflict with USB-Ethernet at 192.168.55.1)
+    # Set a Static IP and enable sharing (this starts the DHCP server automatically)
     sudo nmcli con modify Hotspot ipv4.addresses 10.42.0.1/24
-    sudo nmcli con modify Hotspot ipv4.gateway 10.42.0.1
-    sudo nmcli con modify Hotspot ipv4.method manual
+    sudo nmcli con modify Hotspot ipv4.method shared
 
     # [CRITICAL] Set High Priority to ensure it starts instead of searching for home Wi-Fi
     sudo nmcli con modify Hotspot connection.autoconnect-priority 100

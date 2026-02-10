@@ -77,9 +77,9 @@
 
 ### 4️⃣ Connect to Robot
 
-1. Connect to WiFi network: **GO2-Robot**
-2. Password: **robotics123**
-3. Open browser: **http://192.168.1.1:5000**
+1. Connect to WiFi network: **GO2_Control_Hub**
+2. Password: **go2demo123**
+3. Open browser: **http://10.42.0.1:5000**
    (or the IP address your teacher provides)
 4. **IMPORTANT:** When asked, click **"Allow"** to let the website use your camera
    - This is the same camera you used for training!

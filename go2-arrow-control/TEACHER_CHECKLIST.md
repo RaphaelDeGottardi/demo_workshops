@@ -20,9 +20,9 @@
 
 ### 3. Network Configuration
 - [ ] WiFi hotspot configured on Jetson
-  - SSID: `GO2-Robot` (or your choice)
+  - SSID: `GO2_Control_Hub` (or your choice)
   - Password: `go2demo123` (or your choice)
-  - IP address: `192.168.1.1` or note actual IP
+  - IP address: `10.42.0.1` or note actual IP
 - [ ] Test connection from student device
 - [ ] Access web interface successfully
 - [ ] Write connection details on whiteboard
@@ -57,9 +57,9 @@
 ```
 GO2 Robot Control
 -----------------
-1. WiFi: GO2-Robot
-2. Password: robotics123
-3. Website: http://192.168.1.1:5000
+1. WiFi: GO2_Control_Hub
+2. Password: go2demo123
+3. Website: http://10.42.0.1:5000
 4. See STUDENT_GUIDE.md for instructions
 ```
 

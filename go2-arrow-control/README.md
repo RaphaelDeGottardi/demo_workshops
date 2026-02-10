@@ -120,12 +120,12 @@ Or use the Network Manager GUI.
 ### Step 2: Connect to the Robot's WiFi
 
 Connect your laptop/tablet to the GO2 robot's WiFi hotspot:
-- **Network Name**: GO2-Robot (or as configured)
-- **Password**: robotics123 (or as configured)
+- **Network Name**: GO2_Control_Hub (or as configured)
+- **Password**: go2demo123 (or as configured)
 
 ### Step 3: Upload Your Model
 
-1. Open web browser and go to: `http://192.168.1.1:5000` (or Jetson's IP)
+1. Open web browser and go to: `http://10.42.0.1:5000` (or Jetson's IP)
 2. Scroll to "Upload New Model" section
 3. Enter your name or team name in "Model Name"
 4. Click "Choose File" and select your `.tflite` file
