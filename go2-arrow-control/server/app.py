@@ -535,9 +535,18 @@ def list_models():
             for filename in os.listdir(app.config['UPLOAD_FOLDER']):
                 if filename.endswith('.tflite'):
                     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    
+                    # Correct name extraction: safe_name_YYYYMMDD_HHMMSS.tflite
+                    # We remove the timestamp suffix to get the original team/model name
+                    parts = filename.replace('.tflite', '').rsplit('_', 2)
+                    if len(parts) >= 3:
+                        name = parts[0].replace('_', ' ') # Restore spaces for display
+                    else:
+                        name = filename.split('_')[0]
+                        
                     models.append({
                         'filename': filename,
-                        'name': filename.split('_')[0] if '_' in filename else filename,
+                        'name': name,
                         'size': os.path.getsize(filepath),
                         'modified': datetime.fromtimestamp(os.path.getmtime(filepath)).isoformat()
                     })

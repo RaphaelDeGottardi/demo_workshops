@@ -217,12 +217,25 @@ async function loadModelsList() {
         select.innerHTML = '<option value="">-- Choose a Model --</option>';
         
         if (data.models) {
+            // Count occurrences of each model name to detect duplicates
+            const nameCounts = {};
+            data.models.forEach(m => {
+                nameCounts[m.name] = (nameCounts[m.name] || 0) + 1;
+            });
+
             data.models.forEach(model => {
                 const opt = document.createElement('option');
                 opt.value = model.filename;
-                // Add modification time
-                const date = new Date(model.modified).toLocaleDateString();
-                opt.textContent = `${model.name} (${date})`;
+                
+                // If there are multiple models with the same name, show the timestamp to distinguish them.
+                // Otherwise, just show the clean model name.
+                if (nameCounts[model.name] > 1) {
+                    const dateObj = new Date(model.modified);
+                    const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    opt.textContent = `${model.name} (${timeStr})`;
+                } else {
+                    opt.textContent = model.name;
+                }
                 select.appendChild(opt);
             });
             
