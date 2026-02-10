@@ -171,11 +171,11 @@ header h1 {
     margin-bottom: 20px;
 }
 
-#webcam {
+#webcam, #pilot-feed {
     width: 100%;
     height: auto;
     display: block;
-    transform: scaleX(-1); /* Mirror the video */
+    transform: scaleX(-1); /* Mirror the video for natural feel */
 }
 
 #canvas {

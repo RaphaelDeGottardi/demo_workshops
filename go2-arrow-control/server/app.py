@@ -128,6 +128,7 @@ PREDICTION_BUFFER = None
 PREDICTION_BUFFER_LOCK = threading.Lock()
 LAST_SENT_COMMAND_NAME = None
 LAST_PILOT_FRAME = None # Stores the last frame sent by the pilot for others to see
+LAST_PREDICTION_DATA = None # Stores prediction info for others to see
 
 # Settings
 settings = {
@@ -308,10 +309,11 @@ def teacher_lock_system():
 
 @app.route('/api/pilot_frame', methods=['GET'])
 def get_pilot_frame():
-    """Get the last frame sent by the current pilot"""
-    if LAST_PILOT_FRAME:
-        return jsonify({'image': LAST_PILOT_FRAME})
-    return jsonify({'image': None})
+    """Get the last frame and prediction sent by the current pilot"""
+    return jsonify({
+        'image': LAST_PILOT_FRAME,
+        'prediction': LAST_PREDICTION_DATA
+    })
 
 
 @app.route('/logs')
@@ -343,7 +345,7 @@ def predict_frame():
     Expects: JSON with base64 encoded image
     Returns: JSON with prediction, confidence, and command
     """
-    global last_command_time, pilot_last_active, LAST_PILOT_FRAME
+    global last_command_time, pilot_last_active, LAST_PILOT_FRAME, LAST_PREDICTION_DATA
     
     # Check if this user is the current pilot
     if not is_current_pilot():
@@ -377,7 +379,7 @@ def predict_frame():
         if PREDICTION_BUFFER is None:
             with PREDICTION_BUFFER_LOCK:
                 if PREDICTION_BUFFER is None:
-                    PREDICTION_BUFFER = deque(maxlen=int(settings.get('buffer_size', 10)))
+                    PREDICTION_BUFFER = deque(maxlen=int(settings.get('buffer_size', 5)))
 
         # Run inference if model is loaded and inference is enabled
         if not (inference_engine and inference_engine.model_loaded and settings['inference_enabled']):
@@ -398,18 +400,18 @@ def predict_frame():
         command_to_execute = 'Idle'
         consensus_count = 0
         most_common = None
-        if len(buffer_snapshot) >= int(settings.get('buffer_size', 10)):
+        if len(buffer_snapshot) >= int(settings.get('buffer_size', 5)):
             counts = Counter(buffer_snapshot)
             most_common, count = counts.most_common(1)[0]
             consensus_count = int(count)
             # Require that most_common is not 'Idle' and meets consensus_required
-            if most_common.lower() != 'idle' and count >= int(settings.get('consensus_required', 7)):
+            if most_common.lower() != 'idle' and count >= int(settings.get('consensus_required', 3)):
                 command_to_execute = most_common
             else:
                 command_to_execute = 'Idle'
 
         # Enforce confidence threshold for the latest frame before counting it as valid
-        frame_valid = confidence >= settings.get('confidence_threshold', 0.8)
+        frame_valid = confidence >= settings.get('confidence_threshold', 0.65)
 
         # Rate-control: only send commands at most once per command_interval
         global last_command_sent_time, last_command_time, LAST_SENT_COMMAND_NAME
@@ -420,7 +422,7 @@ def predict_frame():
 
         if command_to_execute != 'Idle' and frame_valid:
             # Enough consensus to move — check rate limit
-            interval = float(settings.get('command_interval', 0.5))
+            interval = float(settings.get('command_interval', 0.1))
             if now - last_command_sent_time >= interval:
                 if robot_controller and robot_controller.connected:
                     robot_controller.execute_command(command_to_execute, settings['max_speed'])
@@ -447,12 +449,19 @@ def predict_frame():
                     robot_controller.stop()
                     LAST_SENT_COMMAND_NAME = 'Idle'
 
+        # Update global prediction data for pilot view streamers
+        LAST_PREDICTION_DATA = {
+            'prediction': prediction,
+            'confidence': float(confidence),
+            'command_to_execute': command_to_execute
+        }
+
         return jsonify({
             'prediction': prediction,
             'confidence': float(confidence),
             'threshold': settings['confidence_threshold'],
-            'buffer_size': int(settings.get('buffer_size', 10)),
-            'consensus_required': int(settings.get('consensus_required', 7)),
+            'buffer_size': int(settings.get('buffer_size', 5)),
+            'consensus_required': int(settings.get('consensus_required', 3)),
             'buffer_snapshot': buffer_snapshot,
             'most_common': most_common if len(buffer_snapshot) > 0 else None,
             'consensus_count': consensus_count,

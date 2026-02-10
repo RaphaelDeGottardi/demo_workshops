@@ -10,7 +10,7 @@ let currentState = {
 
 let inferenceInterval = null;
 let pilotFeedInterval = null;
-const INFERENCE_FPS = 2;
+const INFERENCE_FPS = 10;
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeWebcam();
@@ -135,7 +135,6 @@ function setViewMode(mode) {
 async function fetchPilotFrame() {
     if (currentState.isPilot && currentState.viewMode === 'pilot') {
         // If we are pilot, "pilot view" is just our own local frames anyway
-        // or we could just show the local video.
         setViewMode('local'); 
         return;
     }
@@ -145,6 +144,20 @@ async function fetchPilotFrame() {
         const data = await res.json();
         if (data.image) {
             document.getElementById('pilot-feed').src = data.image;
+        }
+        
+        // Update prediction display if in pilot mode
+        if (data.prediction && currentState.viewMode === 'pilot') {
+            const pred = data.prediction;
+            const conf = (pred.confidence * 100).toFixed(0);
+            const cmd = pred.command_to_execute;
+            
+            let text = `Pilot Seeing: ${pred.prediction} (${conf}%)`;
+            if (cmd && cmd !== 'Idle') {
+                text += ` -> EXECUTE: ${cmd}`;
+                document.getElementById('last-cmd').textContent = cmd;
+            }
+            updateDisplay(text, cmd !== 'Idle' ? 'success' : 'info');
         }
     } catch (e) {
         console.error('Failed to fetch pilot frame', e);
