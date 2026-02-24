@@ -143,13 +143,9 @@ class GO2Controller:
         self._send_command(vx=0.0, vy=0.0, vyaw=yaw_speed)
 
     def rotate_in_place(self, speed=None):
-        """Rotate in place (for down arrow - safer than backing up)"""
-        if speed is None:
-            speed = self.default_turn_speed
-
-        yaw_speed = speed * self.turn_speed_multiplier
-        self.logger.info("⟳ Rotating in place at %.2f rad/s", yaw_speed)
-        self._send_command(vx=0.0, vy=0.0, vyaw=yaw_speed)
+        """Sit down (mapped from rotate/down command)."""
+        self.logger.info("↓ Sitting down")
+        self._bridge_cmd("sit")
 
     def stop(self):
         """Stop all movement"""
