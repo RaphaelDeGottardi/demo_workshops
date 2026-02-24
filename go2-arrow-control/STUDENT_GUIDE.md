@@ -30,10 +30,10 @@
 - Draw a LEFT arrow (←) on white paper  
 - Take 50+ photos from different angles
 
-**Class 4: Rotate**
+**Class 4: Sit**
 - Draw a DOWN arrow (↓) on white paper
 - Take 50+ photos from different angles
--- (Robot will rotate in place - safer than going backwards!)
+- (Robot will sit down - safer than going backwards!)
 
 **Important: Class Order and Counts**
 
@@ -43,7 +43,7 @@
    1. Forward
    2. Right
    3. Left
-   4. Rotate
+   4. Sit
    5. Idle
 
 - If your model produces fewer or more output classes than expected, the server will attempt to adjust but will warn you. Uploading or loading a model whose number of output classes does not match the number of labels can be unsafe — the wrong prediction may cause unintended robot movement.
@@ -121,7 +121,7 @@
 - UP arrow (↑) → Robot moves **forward**
 - RIGHT arrow (→) → Robot **turns right**
 - LEFT arrow (←) → Robot **turns left**
-- DOWN arrow (↓) → Robot **rotates in place**
+- DOWN arrow (↓) → Robot **sits down**
 
 ### 9️⃣ When You're Done
 

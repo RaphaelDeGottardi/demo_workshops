@@ -683,7 +683,7 @@ def upload_model():
         labels_path = filepath.replace(".tflite", "_labels.txt")
         if not os.path.exists(labels_path):
             try:
-                default_labels = ["Forward", "Right", "Left", "Rotate", "Idle"]
+                default_labels = ["Forward", "Right", "Left", "Sit", "Idle"]
                 with open(labels_path, "w") as lf:
                     for lbl in default_labels:
                         lf.write(f"{lbl}\n")

@@ -10,8 +10,8 @@ import logging
 
 import zmq
 
-BRIDGE_HOST = os.getenv('GO2_BRIDGE_HOST', 'localhost')
-BRIDGE_CMD_PORT = int(os.getenv('GO2_ZMQ_CMD_PORT', '5555'))
+BRIDGE_HOST = os.getenv("GO2_BRIDGE_HOST", "localhost")
+BRIDGE_CMD_PORT = int(os.getenv("GO2_ZMQ_CMD_PORT", "5555"))
 
 
 class GO2Controller:
@@ -27,15 +27,15 @@ class GO2Controller:
         self.default_forward_speed = 0.3
         self.default_turn_speed = 0.5
         self.turn_speed_multiplier = 4.0
-        self.logger = logging.getLogger('control')
+        self.logger = logging.getLogger("control")
 
         # Command mapping
         self.command_map = {
-            'Forward': self.move_forward,
-            'Right': self.turn_right,
-            'Left': self.turn_left,
-            'Rotate': self.rotate_in_place,
-            'Idle': self.idle
+            "Forward": self.move_forward,
+            "Right": self.turn_right,
+            "Left": self.turn_left,
+            "Sit": self.sit_down,
+            "Idle": self.idle,
         }
 
     def idle(self, *_args, **_kwargs):
@@ -56,7 +56,9 @@ class GO2Controller:
             resp = self._bridge_cmd("status")
             if resp and resp.get("ok"):
                 self.connected = True
-                self.logger.info("Connected to Go2 bridge at %s:%d", BRIDGE_HOST, BRIDGE_CMD_PORT)
+                self.logger.info(
+                    "Connected to Go2 bridge at %s:%d", BRIDGE_HOST, BRIDGE_CMD_PORT
+                )
             else:
                 self.connected = True  # Still mark connected; bridge may be starting up
                 self.logger.warning("Bridge responded but status was not ok: %s", resp)
@@ -142,8 +144,8 @@ class GO2Controller:
         self.logger.info("↺ Turning left at %.2f rad/s", yaw_speed)
         self._send_command(vx=0.0, vy=0.0, vyaw=yaw_speed)
 
-    def rotate_in_place(self, speed=None):
-        """Sit down (mapped from rotate/down command)."""
+    def sit_down(self, speed=None):
+        """Sit down (mapped from down-arrow class)."""
         self.logger.info("↓ Sitting down")
         self._bridge_cmd("sit")
 
@@ -163,7 +165,7 @@ class GO2Controller:
         Execute a named command
 
         Args:
-            command_name: Name of the command (Forward, Right, Left, Rotate)
+            command_name: Name of the command (Forward, Right, Left, Sit)
             speed: Optional speed parameter
         """
         if not self.connected:
@@ -194,8 +196,9 @@ class GO2Controller:
 # Test script
 if __name__ == "__main__":
     import sys
+
     logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger('control')
+    logger = logging.getLogger("control")
     logger.info("GO2 Controller Test (via ZMQ bridge)")
     logger.info("%s", "=" * 40)
 
@@ -225,9 +228,9 @@ if __name__ == "__main__":
         controller.stop()
         time.sleep(1)
 
-        # Test rotate
-        logger.info("\n4. Testing ROTATE in place")
-        controller.rotate_in_place(0.4)
+        # Test sit
+        logger.info("\n4. Testing SIT")
+        controller.sit_down(0.4)
         time.sleep(2)
         controller.stop()
 

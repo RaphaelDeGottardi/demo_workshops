@@ -6,7 +6,7 @@ Control your Unitree GO2 EDU robot using hand-drawn arrows and Google Teachable 
 
 ## 🎯 Overview
 
-This system allows high school students to train their own machine learning models using Teachable Machine to control a Unitree GO2 robot. Students draw arrows on paper (Forward, Right, Left, Rotate), train a model to recognize them, and then upload the model to control the robot in real-time!
+This system allows high school students to train their own machine learning models using Teachable Machine to control a Unitree GO2 robot. Students draw arrows on paper (Forward, Right, Left, Sit), train a model to recognize them, and then upload the model to control the robot in real-time!
 
 **Need to connect remotely?** See [SETUP_ACCESS.md](SETUP_ACCESS.md) for instructions on connecting from other devices.
 
@@ -103,7 +103,7 @@ Or use the Network Manager GUI.
    - **Forward** - Draw an up arrow ↑
    - **Right** - Draw a right arrow →
    - **Left** - Draw a left arrow ←
-   - **Rotate** - Draw a down arrow ↓ (robot rotates instead of going backwards)
+   - **Sit** - Draw a down arrow ↓
 
 4. For each class:
    - Draw the arrow on white paper with a thick marker
@@ -274,7 +274,7 @@ sudo systemctl start go2-control
 2. **Command Timeout**: Stops if no arrow detected for 2 seconds
 3. **Emergency Stop**: Always available big red button
 4. **Speed Limiting**: Configurable maximum speed
-5. **No Backwards**: Robot rotates instead (obstacle avoidance doesn't work backwards)
+5. **No Backwards**: Robot sits instead (obstacle avoidance doesn't work backwards)
 
 ## 📁 Project Structure
 
