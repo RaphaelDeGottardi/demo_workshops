@@ -293,18 +293,39 @@ async function loadSelectedModel() {
 
 // --- Inference Logic ---
 
-function startInference() {
-    if (!currentState.modelLoaded) return;
-    currentState.inferenceActive = true;
-    
-    inferenceInterval = setInterval(sendFrame, 1000 / INFERENCE_FPS);
-    updateButtons();
-    updateDisplay('Running...', 'success');
-    
-    // Update server state
-    fetch('/start_inference', {
-        method: 'POST'
-    });
+async function startInference() {
+    if (!currentState.modelLoaded || !currentState.isPilot) return;
+
+    const startBtn = document.getElementById('start-btn');
+    startBtn.disabled = true;
+    startBtn.textContent = 'Starting...';
+    updateDisplay('Starting control...', 'info');
+
+    try {
+        const res = await fetch('/start_inference', {
+            method: 'POST'
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data.success) {
+            const message = data.error || data.message || 'Failed to start control';
+            showToast(message, 'error');
+            updateDisplay('Start failed', 'error');
+            return;
+        }
+
+        currentState.inferenceActive = true;
+        if (inferenceInterval) clearInterval(inferenceInterval);
+        inferenceInterval = setInterval(sendFrame, 1000 / INFERENCE_FPS);
+        updateDisplay('Running...', 'success');
+        showToast('Control started', 'success');
+    } catch (e) {
+        showToast('Failed to connect to server', 'error');
+        updateDisplay('Start failed', 'error');
+    } finally {
+        startBtn.textContent = '▶️ Start Control';
+        updateButtons();
+    }
 }
 
 function stopInference(notifyServer = true) {
