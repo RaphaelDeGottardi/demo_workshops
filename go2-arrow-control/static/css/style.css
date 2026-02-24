@@ -263,6 +263,11 @@ header h1 {
     animation: pulse 2s infinite;
 }
 
+.btn-danger:disabled {
+    animation: none;
+    background: #f4a5a5;
+}
+
 @keyframes pulse {
     0%, 100% {
         opacity: 1;

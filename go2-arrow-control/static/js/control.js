@@ -340,6 +340,7 @@ function stopInference(notifyServer = true) {
 }
 
 async function emergencyStop() {
+    if (!currentState.isPilot) return;
     stopInference();
     await fetch('/emergency_stop', { method: 'POST' });
     showToast('EMERGENCY STOP TRIGGERED', 'error');
@@ -506,6 +507,7 @@ function updateButtons() {
     
     document.getElementById('start-btn').disabled = !currentState.modelLoaded || currentState.inferenceActive || !isPilot;
     document.getElementById('stop-btn').disabled = !currentState.inferenceActive || !isPilot;
+    document.getElementById('emergency-btn').disabled = !isPilot;
     document.getElementById('load-model-btn').disabled = !isPilot;
     document.getElementById('save-settings-btn').disabled = !isPilot;
     
