@@ -210,6 +210,14 @@ def validate_settings_payload(data):
     return validated, errors
 
 
+def reconfigure_prediction_buffer(new_size):
+    """Resize the live prediction buffer while preserving recent entries."""
+    global PREDICTION_BUFFER
+    with PREDICTION_BUFFER_LOCK:
+        existing = list(PREDICTION_BUFFER) if PREDICTION_BUFFER is not None else []
+        PREDICTION_BUFFER = deque(existing[-new_size:], maxlen=new_size)
+
+
 def is_current_pilot():
     """Helper to check if the current user is the pilot"""
     global current_pilot
@@ -801,6 +809,9 @@ def manage_settings():
         validated, errors = validate_settings_payload(data)
         if errors:
             return jsonify({'error': 'Invalid settings payload', 'details': errors}), 400
+
+        if 'buffer_size' in validated:
+            reconfigure_prediction_buffer(validated['buffer_size'])
 
         settings.update(validated)
         
