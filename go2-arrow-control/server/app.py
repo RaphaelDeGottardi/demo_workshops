@@ -143,6 +143,72 @@ settings.setdefault('command_interval', 0.2)
 settings.setdefault('buffer_size', 3)
 settings.setdefault('consensus_required', 2)
 
+# Server-side bounds for runtime safety settings
+SETTINGS_LIMITS = {
+    'confidence_threshold': (0.30, 0.95),
+    'max_speed': (0.10, 0.50),
+    'command_interval': (0.02, 1.00),
+    'buffer_size': (1, 16),
+}
+
+
+def validate_settings_payload(data):
+    """Validate and normalize incoming settings updates."""
+    validated = {}
+    errors = []
+
+    if not isinstance(data, dict):
+        return validated, ['Request body must be a JSON object']
+
+    def validate_float(name):
+        if name not in data:
+            return
+        lo, hi = SETTINGS_LIMITS[name]
+        try:
+            value = float(data[name])
+        except (TypeError, ValueError):
+            errors.append(f"{name} must be a number")
+            return
+        if value < lo or value > hi:
+            errors.append(f"{name} must be between {lo} and {hi}")
+            return
+        validated[name] = value
+
+    def validate_int(name):
+        if name not in data:
+            return
+        lo, hi = SETTINGS_LIMITS[name]
+        try:
+            value = int(data[name])
+        except (TypeError, ValueError):
+            errors.append(f"{name} must be an integer")
+            return
+        if value < lo or value > hi:
+            errors.append(f"{name} must be between {lo} and {hi}")
+            return
+        validated[name] = value
+
+    validate_float('confidence_threshold')
+    validate_float('max_speed')
+    validate_float('command_interval')
+    validate_int('buffer_size')
+
+    if 'consensus_required' in data:
+        try:
+            consensus = int(data['consensus_required'])
+        except (TypeError, ValueError):
+            errors.append("consensus_required must be an integer")
+            consensus = None
+
+        if consensus is not None:
+            target_buffer = validated.get('buffer_size', int(settings.get('buffer_size', 3)))
+            if consensus < 1 or consensus > target_buffer:
+                errors.append(f"consensus_required must be between 1 and {target_buffer}")
+            else:
+                validated['consensus_required'] = consensus
+
+    return validated, errors
+
 
 def is_current_pilot():
     """Helper to check if the current user is the pilot"""
@@ -730,25 +796,13 @@ def manage_settings():
     if request.method == 'POST':
         if not is_current_pilot():
             return jsonify({'error': 'Not the current pilot'}), 403
-            
-        data = request.get_json()
-        
-        # Core parameters
-        if 'confidence_threshold' in data:
-            settings['confidence_threshold'] = float(data['confidence_threshold'])
-        
-        if 'max_speed' in data:
-            settings['max_speed'] = float(data['max_speed'])
 
-        # Advanced parameters
-        if 'command_interval' in data:
-            settings['command_interval'] = float(data['command_interval'])
-            
-        if 'buffer_size' in data:
-            settings['buffer_size'] = int(data['buffer_size'])
-            
-        if 'consensus_required' in data:
-            settings['consensus_required'] = int(data['consensus_required'])
+        data = request.get_json(silent=True)
+        validated, errors = validate_settings_payload(data)
+        if errors:
+            return jsonify({'error': 'Invalid settings payload', 'details': errors}), 400
+
+        settings.update(validated)
         
         return jsonify({'success': True, 'settings': settings})
     
