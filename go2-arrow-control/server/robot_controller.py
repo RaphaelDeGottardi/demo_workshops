@@ -26,6 +26,7 @@ class GO2Controller:
         # Movement parameters
         self.default_forward_speed = 0.3
         self.default_turn_speed = 0.5
+        self.turn_speed_multiplier = 4.0
         self.logger = logging.getLogger('control')
 
         # Command mapping
@@ -128,24 +129,27 @@ class GO2Controller:
         if speed is None:
             speed = self.default_turn_speed
 
-        self.logger.info("↻ Turning right at %.2f rad/s", speed)
-        self._send_command(vx=0.0, vy=0.0, vyaw=-speed)
+        yaw_speed = speed * self.turn_speed_multiplier
+        self.logger.info("↻ Turning right at %.2f rad/s", yaw_speed)
+        self._send_command(vx=0.0, vy=0.0, vyaw=-yaw_speed)
 
     def turn_left(self, speed=None):
         """Turn left (rotate counter-clockwise)"""
         if speed is None:
             speed = self.default_turn_speed
 
-        self.logger.info("↺ Turning left at %.2f rad/s", speed)
-        self._send_command(vx=0.0, vy=0.0, vyaw=speed)
+        yaw_speed = speed * self.turn_speed_multiplier
+        self.logger.info("↺ Turning left at %.2f rad/s", yaw_speed)
+        self._send_command(vx=0.0, vy=0.0, vyaw=yaw_speed)
 
     def rotate_in_place(self, speed=None):
         """Rotate in place (for down arrow - safer than backing up)"""
         if speed is None:
             speed = self.default_turn_speed
 
-        self.logger.info("⟳ Rotating in place at %.2f rad/s", speed)
-        self._send_command(vx=0.0, vy=0.0, vyaw=speed)
+        yaw_speed = speed * self.turn_speed_multiplier
+        self.logger.info("⟳ Rotating in place at %.2f rad/s", yaw_speed)
+        self._send_command(vx=0.0, vy=0.0, vyaw=yaw_speed)
 
     def stop(self):
         """Stop all movement"""
