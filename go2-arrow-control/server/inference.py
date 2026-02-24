@@ -112,10 +112,10 @@ class ModelInference:
         self.logger.info("Using default classes: %s", self.classes)
 
     def preprocess_image(self, image):
-        """Preprocess image for model input
+        """Preprocess image for model input.
 
         Args:
-            image: OpenCV image (BGR format) or RGB numpy array
+            image: RGB numpy array from browser frame capture.
         """
         # Resize to model input size
         img = cv2.resize(image, (self.input_shape[1], self.input_shape[0]))
@@ -140,7 +140,7 @@ class ModelInference:
         Run inference on an image
 
         Args:
-            image: OpenCV image (BGR format)
+            image: RGB numpy array
 
         Returns:
             tuple: (predicted_class_name, confidence)
