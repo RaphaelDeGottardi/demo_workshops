@@ -366,13 +366,11 @@ def predict_frame():
         image_data = data['image'].split(',')[1]  # Remove data:image/jpeg;base64, prefix
         image_bytes = base64.b64decode(image_data)
 
-        # Convert to numpy array
+        # Convert to numpy array.
+        # Frames from browser canvas/PIL are RGB and should stay RGB for
+        # Teachable Machine image models.
         image = Image.open(BytesIO(image_bytes))
         image_np = np.array(image)
-
-        # Convert RGB to BGR for OpenCV compatibility
-        if len(image_np.shape) == 3 and image_np.shape[2] == 3:
-            image_np = image_np[:, :, ::-1]  # RGB to BGR
 
         # Ensure prediction buffer initialized
         global PREDICTION_BUFFER
