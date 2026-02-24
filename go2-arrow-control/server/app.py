@@ -121,6 +121,7 @@ last_command_sent_time = 0
 current_pilot = None  # Stores the session user_id of the person currently in control
 pilot_lock = threading.Lock()
 pilot_last_active = 0 # To detect if a pilot has disconnected
+PILOT_INACTIVITY_TIMEOUT = 30.0  # Auto-release pilot after inactivity
 system_locked = False # Teacher can lock the system to prevent any control
 
 # Prediction buffering for consensus
@@ -154,6 +155,34 @@ def is_current_pilot():
         return current_pilot is not None and current_pilot == user_id
 
 
+def expire_stale_pilot():
+    """Auto-release pilot if their session appears disconnected/inactive."""
+    global current_pilot, pilot_last_active
+
+    stale_pilot = None
+    idle_for = 0.0
+    now = time.time()
+
+    with pilot_lock:
+        if current_pilot is None or pilot_last_active <= 0:
+            return
+
+        idle_for = now - pilot_last_active
+        if idle_for <= PILOT_INACTIVITY_TIMEOUT:
+            return
+
+        stale_pilot = current_pilot
+        current_pilot = None
+        pilot_last_active = 0
+
+    stop_robot_and_inference()
+    control_logger.warning(
+        "Released stale pilot %s after %.1fs of inactivity",
+        stale_pilot,
+        idle_for
+    )
+
+
 def stop_robot_and_inference():
     """Helper to stop both inference and the robot movement"""
     global robot_controller
@@ -171,6 +200,7 @@ def allowed_file(filename):
 def ensure_user_id():
     if 'user_id' not in session:
         session['user_id'] = str(uuid.uuid4())
+    expire_stale_pilot()
 
 
 @app.route('/')
@@ -223,20 +253,28 @@ def teacher_page():
 @app.route('/api/control_status', methods=['GET'])
 def control_status():
     """Get current pilot status"""
-    global current_pilot, system_locked
-    
+    global current_pilot, system_locked, pilot_last_active
+    user_id = session.get('user_id')
+
+    with pilot_lock:
+        is_pilot = user_id == current_pilot
+        if is_pilot:
+            pilot_last_active = time.time()  # Heartbeat while control page is open
+        pilot = current_pilot
+        locked = system_locked
+
     return jsonify({
-        'current_pilot': current_pilot,
-        'is_pilot': session.get('user_id') == current_pilot,
-        'user_id': session.get('user_id'),
-        'system_locked': system_locked
+        'current_pilot': pilot,
+        'is_pilot': is_pilot,
+        'user_id': user_id,
+        'system_locked': locked
     })
 
 
 @app.route('/api/take_control', methods=['POST'])
 def take_control():
     """Attempt to take control of the robot"""
-    global current_pilot, system_locked
+    global current_pilot, system_locked, pilot_last_active
     
     if system_locked and not session.get('is_teacher'):
         return jsonify({'success': False, 'message': 'System is currently locked by teacher'}), 403
@@ -251,6 +289,7 @@ def take_control():
             return jsonify({'success': False, 'message': 'Robot is currently controlled by another student'}), 409
             
         current_pilot = user_id
+        pilot_last_active = time.time()
         control_logger.info(f"User {user_id} took control")
         
     return jsonify({'success': True, 'message': 'You now have control'})
@@ -259,12 +298,13 @@ def take_control():
 @app.route('/api/relinquish_control', methods=['POST'])
 def relinquish_control():
     """Release control of the robot"""
-    global current_pilot
+    global current_pilot, pilot_last_active
     
     user_id = session.get('user_id')
     with pilot_lock:
         if current_pilot == user_id:
             current_pilot = None
+            pilot_last_active = 0
             stop_robot_and_inference()
             control_logger.info(f"User {user_id} relinquished control")
             
@@ -274,12 +314,13 @@ def relinquish_control():
 @app.route('/api/teacher/reset_control', methods=['POST'])
 def teacher_reset_control():
     """Teacher force-resets control"""
-    global current_pilot
+    global current_pilot, pilot_last_active
     if not session.get('is_teacher'):
         return jsonify({'error': 'Unauthorized'}), 403
     
     with pilot_lock:
         current_pilot = None
+        pilot_last_active = 0
         stop_robot_and_inference()
         control_logger.info("Teacher reset control")
         
@@ -289,7 +330,7 @@ def teacher_reset_control():
 @app.route('/api/teacher/lock_system', methods=['POST'])
 def teacher_lock_system():
     """Teacher locks the system"""
-    global system_locked, current_pilot
+    global system_locked, current_pilot, pilot_last_active
     if not session.get('is_teacher'):
         return jsonify({'error': 'Unauthorized'}), 403
     
@@ -299,6 +340,7 @@ def teacher_lock_system():
     if system_locked:
         with pilot_lock:
             current_pilot = None  # Boot current pilot
+            pilot_last_active = 0
             stop_robot_and_inference()
         control_logger.info("Teacher LOCKED the system")
     else:
