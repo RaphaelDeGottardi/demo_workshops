@@ -242,6 +242,11 @@ def is_current_pilot():
         return current_pilot is not None and current_pilot == user_id
 
 
+def is_teacher():
+    """Helper to check if the current user is a teacher"""
+    return session.get("is_teacher") is True
+
+
 def expire_stale_pilot():
     """Auto-release pilot if their session appears disconnected/inactive."""
     global current_pilot, pilot_last_active
@@ -354,6 +359,7 @@ def control_status():
             "is_pilot": is_pilot,
             "user_id": user_id,
             "system_locked": locked,
+            "mock_mode": getattr(robot_controller, 'mock_mode', False) if robot_controller else False
         }
     )
 
@@ -800,6 +806,29 @@ def delete_model():
             {"success": True, "message": f"Model {filename} deleted successfully"}
         )
 
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/reconnect_robot", methods=["POST"])
+def reconnect_robot():
+    """Manually trigger robot reconnection"""
+    global robot_controller
+
+    if not is_teacher():
+        return jsonify({"error": "Unauthorized"}), 403
+
+    try:
+        if robot_controller is None:
+            robot_controller = GO2Controller()
+        
+        success = robot_controller.connect()
+        return jsonify({
+            "success": success,
+            "message": "Reconnection attempted",
+            "connected": robot_controller.connected,
+            "mock_mode": getattr(robot_controller, 'mock_mode', False)
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

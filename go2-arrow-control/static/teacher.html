@@ -58,12 +58,15 @@
                 </div>
                 <div id="pilot-id-small" style="font-size: 0.8em; color: #cbd5e1;"></div>
                 
-                <div style="margin-top: 20px; display: flex; gap: 10px;">
-                    <button onclick="resetControl()" class="btn btn-warning" style="flex: 1;">
+                <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button onclick="resetControl()" class="btn btn-warning" style="flex: 1; min-width: 150px;">
                         🔄 Reset Control
                     </button>
-                    <button id="lock-btn" onclick="toggleLock()" class="btn btn-danger" style="flex: 1;">
+                    <button id="lock-btn" onclick="toggleLock()" class="btn btn-danger" style="flex: 1; min-width: 150px;">
                         🔒 Lock System
+                    </button>
+                    <button onclick="reconnectRobot()" class="btn btn-primary" style="flex: 1; min-width: 150px;">
+                        🤖 Reconnect Robot
                     </button>
                 </div>
             </div>
@@ -72,6 +75,9 @@
                 <h2>System State</h2>
                 <div class="pilot-info">
                     Access Status: <span id="system-lock-status" class="highlight">Unlocked</span>
+                </div>
+                <div class="pilot-info">
+                    Robot Status: <span id="robot-network-status" class="highlight">Normal</span>
                 </div>
             </div>
 
@@ -108,9 +114,18 @@
                 const el = document.getElementById('current-pilot-name');
                 const idEl = document.getElementById('pilot-id-small');
                 const lockEl = document.getElementById('system-lock-status');
+                const robotEl = document.getElementById('robot-network-status');
                 const lockBtn = document.getElementById('lock-btn');
                 
                 isSystemLocked = data.system_locked;
+
+                if (data.mock_mode) {
+                    robotEl.textContent = 'MOCK MODE (disconnected)';
+                    robotEl.style.color = '#e74c3c';
+                } else {
+                    robotEl.textContent = 'CONNECTED';
+                    robotEl.style.color = '#10b981';
+                }
                 
                 if (data.current_pilot) {
                     el.textContent = 'A Student';
@@ -166,6 +181,23 @@
                 }
             } catch (e) {
                 showToast('Action failed', 'error');
+            }
+        }
+
+        async function reconnectRobot() {
+            showToast('Attempting to reconnect...', 'info');
+            try {
+                const res = await fetch('/reconnect_robot', { method: 'POST' });
+                const data = await res.json();
+                if (data.success && data.connected && !data.mock_mode) {
+                    showToast('Robot connected successfully!', 'success');
+                } else if (data.mock_mode) {
+                    showToast('Bridge not found. Still in MOCK mode.', 'warning');
+                } else {
+                    showToast('Failed to connect to bridge.', 'error');
+                }
+            } catch (e) {
+                showToast('Server error during reconnection.', 'error');
             }
         }
 
