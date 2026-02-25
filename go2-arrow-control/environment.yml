@@ -13,6 +13,7 @@ dependencies:
     - tflite-runtime==2.14.0
     - Pillow==10.1.0
     - pyOpenSSL==25.3.0
+    - pyzmq==24.0.1
 
 # Unitree GO2 SDK: install separately following the project's README
 # (e.g. pip install unitree_sdk2py)
