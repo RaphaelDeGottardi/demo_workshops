@@ -88,7 +88,7 @@ Or connect to any shared network.
 5. Click "Train Model"
 6. Once trained, click "Export Model"
 7. Choose "TensorFlow Lite"
-8. Select "Quantized" model
+8. Select "Floating Point" model (not Quantized!)
 9. Unzip the content
 10. Download the `.tflite` file
 
