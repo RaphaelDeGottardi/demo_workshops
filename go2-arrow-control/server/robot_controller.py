@@ -25,9 +25,9 @@ class GO2Controller:
         self.command_lock = threading.Lock()
 
         # Movement parameters
-        self.default_forward_speed = 0.3
-        self.default_turn_speed = 0.5
-        self.turn_speed_multiplier = 2.0
+        self.default_forward_speed = 0.8
+        self.default_turn_speed = 1.0
+        self.default_reverse_speed = 0.6
         self.reverse_speed_multiplyer = 0.5
         self.logger = logging.getLogger("control")
 
@@ -140,37 +140,26 @@ class GO2Controller:
 
     def move_forward(self, speed=None):
         """Move forward"""
-        if speed is None:
-            speed = self.default_forward_speed
-
-        self.logger.info("→ Moving forward at %.2f m/s", speed)
-        self._send_command(vx=speed, vy=0.0, vyaw=0.0)
+        self.logger.info("→ Moving forward at %.2f m/s", self.default_forward_speed)
+        self._send_command(vx=self.default_forward_speed, vy=0.0, vyaw=0.0)
 
     def turn_right(self, speed=None):
         """Turn right (rotate clockwise)"""
-        if speed is None:
-            speed = self.default_turn_speed
-
-        yaw_speed = speed * self.turn_speed_multiplier
-        self.logger.info("↻ Turning right at %.2f rad/s", yaw_speed)
-        self._send_command(vx=0.0, vy=0.0, vyaw=-yaw_speed)
+        self.logger.info("↻ Turning right at %.2f rad/s", self.default_turn_speed)
+        self._send_command(vx=0.0, vy=0.0, vyaw=-self.default_turn_speed)
 
     def turn_left(self, speed=None):
         """Turn left (rotate counter-clockwise)"""
-        if speed is None:
-            speed = self.default_turn_speed
-
-        yaw_speed = speed * self.turn_speed_multiplier
-        self.logger.info("↺ Turning left at %.2f rad/s", yaw_speed)
-        self._send_command(vx=0.0, vy=0.0, vyaw=yaw_speed)
+        self.logger.info("↺ Turning left at %.2f rad/s", self.default_turn_speed)
+        self._send_command(vx=0.0, vy=0.0, vyaw=self.default_turn_speed)
 
     def move_backwards(self, speed=None):
         """Move backwards."""
         if speed is None:
             speed = self.default_forward_speed
 
-        self.logger.info("↓ Moving backwards at %.2f m/s", speed)
-        self._send_command(vx=-speed*self.reverse_speed_multiplyer, vy=0.0, vyaw=0.0)
+        self.logger.info("↓ Moving backwards at %.2f m/s", self.default_reverse_speed)
+        self._send_command(vx=-self.default_reverse_speed, vy=0.0, vyaw=0.0)
 
     def stop(self):
         """Stop all movement"""
