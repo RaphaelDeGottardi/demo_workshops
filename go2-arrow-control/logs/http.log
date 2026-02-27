@@ -7517,3 +7517,8 @@ ssl.SSLError: [SSL: UNEXPECTED_EOF_WHILE_READING] unexpected eof while reading (
 2026-02-26 15:25:55,846 [HTTP] INFO: 172.31.64.1 - - [26/Feb/2026 15:25:55] "GET /status HTTP/1.1" 200 -
 2026-02-26 15:25:57,759 [HTTP] INFO: 172.31.64.1 - - [26/Feb/2026 15:25:57] "GET /api/control_status HTTP/1.1" 200 -
 2026-02-26 15:25:57,858 [HTTP] INFO: 172.31.64.1 - - [26/Feb/2026 15:25:57] "GET /status HTTP/1.1" 200 -
+2026-02-27 12:55:42,335 [HTTP] INFO: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on https://127.0.0.1:5000
+ * Running on https://160.85.86.148:5000
+2026-02-27 12:55:42,335 [HTTP] INFO: [33mPress CTRL+C to quit[0m

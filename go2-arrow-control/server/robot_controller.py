@@ -27,7 +27,8 @@ class GO2Controller:
         # Movement parameters
         self.default_forward_speed = 0.3
         self.default_turn_speed = 0.5
-        self.turn_speed_multiplier = 4.0
+        self.turn_speed_multiplier = 2.0
+        self.reverse_speed_multiplyer = 0.5
         self.logger = logging.getLogger("control")
 
         # Command mapping
@@ -35,7 +36,7 @@ class GO2Controller:
             "Forward": self.move_forward,
             "Right": self.turn_right,
             "Left": self.turn_left,
-            "Sit": self.sit_down,
+            "Backwards": self.move_backwards,
             "Idle": self.idle,
         }
 
@@ -163,10 +164,13 @@ class GO2Controller:
         self.logger.info("↺ Turning left at %.2f rad/s", yaw_speed)
         self._send_command(vx=0.0, vy=0.0, vyaw=yaw_speed)
 
-    def sit_down(self, speed=None):
-        """Sit down (mapped from down-arrow class)."""
-        self.logger.info("↓ Sitting down")
-        self._bridge_cmd("sit")
+    def move_backwards(self, speed=None):
+        """Move backwards."""
+        if speed is None:
+            speed = self.default_forward_speed
+
+        self.logger.info("↓ Moving backwards at %.2f m/s", speed)
+        self._send_command(vx=-speed*self.reverse_speed_multiplyer, vy=0.0, vyaw=0.0)
 
     def stop(self):
         """Stop all movement"""
@@ -184,7 +188,7 @@ class GO2Controller:
         Execute a named command
 
         Args:
-            command_name: Name of the command (Forward, Right, Left, Sit)
+            command_name: Name of the command (Forward, Right, Left, Backwards)
             speed: Optional speed parameter
         """
         if not self.connected:
@@ -247,9 +251,9 @@ if __name__ == "__main__":
         controller.stop()
         time.sleep(1)
 
-        # Test sit
-        logger.info("\n4. Testing SIT")
-        controller.sit_down(0.4)
+        # Test backwards
+        logger.info("\n4. Testing BACKWARDS")
+        controller.move_backwards(0.2)
         time.sleep(2)
         controller.stop()
 

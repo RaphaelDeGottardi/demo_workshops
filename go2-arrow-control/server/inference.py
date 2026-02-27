@@ -28,7 +28,7 @@ class ModelInference:
         self.interpreter = None
         self.input_details = None
         self.output_details = None
-        self.classes = ['Forward', 'Right', 'Left', 'Sit', 'Idle']  # Default classes
+        self.classes = ['Forward', 'Right', 'Left', 'Backwards', 'Idle']  # Default classes
         self.model_loaded = False
         self.input_shape = None
         self.num_classes = None

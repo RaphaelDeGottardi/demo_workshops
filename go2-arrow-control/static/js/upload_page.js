@@ -75,7 +75,7 @@ async function loadModels() {
                     <div class="model-info">
                         <span class="model-name">${escapeHtml(model.name)}</span>
                         <div class="model-meta">
-                            <span>Cmds: Idle, Forward, Left, Right, Sit</span><br>
+                            <span>Cmds: Idle, Forward, Left, Right, Backwards</span><br>
                             <span>${(model.size / 1024).toFixed(1)} KB | ${date}</span>
                         </div>
                     </div>
