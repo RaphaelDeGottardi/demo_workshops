@@ -25,10 +25,9 @@ class GO2Controller:
         self.command_lock = threading.Lock()
 
         # Movement parameters
-        self.default_forward_speed = 0.8
-        self.default_turn_speed = 1.0
-        self.default_reverse_speed = 0.6
-        self.reverse_speed_multiplyer = 0.5
+        self.default_forward_speed = 0.5
+        self.default_turn_speed = 0.8
+        self.default_reverse_speed = 0.35
         self.logger = logging.getLogger("control")
 
         # Command mapping
