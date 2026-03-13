@@ -1,5 +1,9 @@
 # Jetson Orin Setup Guide (Single Wi-Fi Interface)
 
+## Important note
+The hotspot running on the orin was an experimental approach and is only kept if this becomes relevant again, we decided that using a router to host a local network would be better.
+
+## Content
 This guide covers setting up a fresh Jetson Orin for the GO2 Arrow Control system.  
 **Challenge:** The Jetson Orin typically has only one Wi-Fi interface. It cannot be connected to the Internet and act as a Hotspot simultaneously.
 **Solution:** We will connect to the Internet first to install dependencies, then switch the Wi-Fi interface to "Hotspot Mode" for the operation phase.
