@@ -6,14 +6,14 @@ More information on the Workshop in general can be found [here](https://sagerpas
 ## 🔑 Quick Access & Credentials
 | Entity | Detail | Password |
 | :--- | :--- | :--- |
-| **Orin SSH** | `ssh cai_demo@192.168.0.243` | (Ask Raphael) |
+| **Orin SSH** | `ssh cai_demo@192.168.1.243` | (Ask Raphael) |
 | **WiFi (Local)** | **SSID:** `TP-Link ...` | `57136332` |
 | **Teacher Page** | `/teacher.html` | `teacher123` |¨
 
 | Page| url | Info |
 | :--- | :--- | :--- |
-| **Direct Control Page** | [http://192.168.0.243:8080/](http://192.168.0.243:8080/) | (Try `https` if `http` fails) |
-| **Workshop App** | [http://192.168.0.243:5000/](http://192.168.0.243:5000/) | (Try `https` if `http` fails) |
+| **Direct Control Page** | [http://192.168.1.243:8080/](http://192.168.1.243:8080/) | (Try `https` if `http` fails) |
+| **Workshop App** | [http://192.168.1.243:5000/](http://192.168.1.243:5000/) | (Try `https` if `http` fails) |
 
 ---
 
@@ -27,7 +27,7 @@ More information on the Workshop in general can be found [here](https://sagerpas
 ## Setup
 
 1. Plug in the router (find credentials above).
-2. Mount the Orin onto the Robodog (currently using tape), it will automatically connect to the network and be available via ssh (`ssh cai_demo@192.168.0.243`) when booted.
+2. Mount the Orin onto the Robodog (currently using tape), it will automatically connect to the network and be available via ssh (`ssh cai_demo@192.168.1.243`) when booted.
 3. Start the robodog by pressing the button short then long.
 4. Use the remote control to move it to the desired location.
 
