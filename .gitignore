@@ -3,3 +3,4 @@ uploads/
 .venv
 .vscode
 __pycache__
+go2-arrow-control/logs/*
