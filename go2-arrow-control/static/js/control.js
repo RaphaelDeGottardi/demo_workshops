@@ -22,6 +22,10 @@ const PILOT_FRAME_WIDTH = 320; // Size of the frames shared for the pilot view
 
 const COMMAND_ARROWS = { Forward: '↑', Right: '→', Left: '←', Backwards: '↓', Idle: '⏸' };
 
+// [bar colour, track colour] per class, same as the Teachable Machine preview
+const CLASS_COLORS = [['#E67701', '#FFECE2'], ['#D84C6F', '#FFE9EC'], ['#794AEF', '#F1F0FF'], ['#1967D2', '#D2E3FC']];
+let shownBarLabels = null;
+
 document.addEventListener('DOMContentLoaded', () => {
     initializeWebcam();
     initializeControls();
@@ -127,6 +131,7 @@ function setViewMode(mode) {
             clearInterval(pilotFeedInterval);
             pilotFeedInterval = null;
         }
+        if (!currentState.inferenceActive) resetClassBars();
     } else {
         pilotBtn.classList.add('active');
         pilotBtn.style.background = '#444';
@@ -161,7 +166,8 @@ async function fetchPilotFrame() {
             const pred = data.prediction;
             const conf = (pred.confidence * 100).toFixed(0);
             const cmd = pred.command_to_execute;
-            
+            renderClassBars(pred.labels, pred.probabilities);
+
             let text = `Pilot Seeing: ${pred.prediction} (${conf}%)`;
             if (cmd && cmd !== 'Idle') {
                 text += ` -> EXECUTE: ${cmd}`;
@@ -268,7 +274,47 @@ function setCurrentModel(info) {
     currentState.modelLoaded = !!info;
     document.getElementById('model-status').textContent = info ? info.name : 'None';
     renderModelMapping(info);
+    renderClassBars(info ? info.labels : null, null);
     updateButtons();
+}
+
+// Show one bar per class like the Teachable Machine preview. probabilities may be null (all 0%).
+function renderClassBars(labels, probabilities) {
+    const panel = document.getElementById('class-output');
+    if (!labels || !labels.length) {
+        panel.style.display = 'none';
+        shownBarLabels = null;
+        return;
+    }
+
+    const container = document.getElementById('class-bars');
+    // Rebuild the rows only when the classes change, then just update the widths
+    if (JSON.stringify(labels) !== JSON.stringify(shownBarLabels)) {
+        container.innerHTML = labels.map((label, i) => {
+            const [color, track] = CLASS_COLORS[i % CLASS_COLORS.length];
+            return `<div class="bar-graph-holder">
+                <div class="bar-graph-label" style="color: ${color};">${escapeHtml(label)}</div>
+                <div class="bar-graph" style="background-color: ${track};">
+                    <div class="bar-graph-inner" style="background-color: ${color}; width: 0%;">
+                        <span class="bar-graph-value">0%</span>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+        shownBarLabels = labels.slice();
+    }
+
+    container.querySelectorAll('.bar-graph-inner').forEach((bar, i) => {
+        const percent = Math.round(100 * ((probabilities && probabilities[i]) || 0));
+        bar.style.width = percent + '%';
+        bar.firstElementChild.textContent = percent + '%';
+    });
+    panel.style.display = 'block';
+}
+
+function resetClassBars() {
+    const model = currentState.currentModel;
+    renderClassBars(model ? model.labels : null, null);
 }
 
 function renderModelMapping(info) {
@@ -394,7 +440,8 @@ function stopInference(notifyServer = true) {
     if (inferenceInterval) clearInterval(inferenceInterval);
     updateButtons();
     updateDisplay('Stopped', 'warning');
-    
+    resetClassBars();
+
     if (notifyServer) {
         fetch('/stop_inference', { method: 'POST' });
     }
@@ -429,6 +476,8 @@ async function sendFrame() {
             // Same preprocessing as the Teachable Machine preview (centre crop, [-1,1])
             await ensureBrowserModel();
             const predictions = await browserModel.predict(video);
+            if (!currentState.inferenceActive) return; // stopped while predicting
+            renderClassBars(predictions.map(p => p.className), predictions.map(p => p.probability));
 
             // Small frame for the pilot view on other devices
             canvas.width = PILOT_FRAME_WIDTH;
@@ -460,10 +509,11 @@ async function sendFrame() {
         const latency = Date.now() - start;
         document.getElementById('latency-val').textContent = latency;
         
-        if (res.ok) {
+        if (res.ok && currentState.inferenceActive) {
             const conf = (data.confidence * 100).toFixed(0);
             const cmd = data.command_to_execute;
-            
+            if (model.type !== 'tfjs') renderClassBars(data.labels, data.probabilities);
+
             let text = `${data.prediction} (${conf}%)`;
             if (cmd && cmd !== 'Idle') {
                 text += ` -> EXECUTE: ${cmd}`;

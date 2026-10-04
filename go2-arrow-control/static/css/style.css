@@ -93,6 +93,64 @@ header h1 {
     display: block;
 }
 
+/* Class probability bars: copied from the Teachable Machine preview (tm-bar-graph) */
+.class-output {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+}
+
+.class-output h4 {
+    margin-bottom: 12px;
+    color: #202124;
+    font-weight: 500;
+}
+
+.bar-graph-holder {
+    display: flex;
+    margin-bottom: 12px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.bar-graph-holder:last-child {
+    margin-bottom: 0;
+}
+
+.bar-graph-label {
+    width: 20%;
+    margin-right: 10px;
+    font-weight: 500;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.bar-graph {
+    width: 70%;
+    height: 29px;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.bar-graph-inner {
+    position: relative;
+    height: 100%;
+    border-radius: 5px;
+}
+
+.bar-graph-value {
+    color: #ffffff;
+    position: absolute;
+    top: 50%;
+    right: 5px;
+    font-size: 10px;
+    font-weight: 400;
+    transform: translate(0, -50%);
+}
+
 /* Class -> robot command mapping shown after loading a model */
 .model-mapping {
     margin-top: 10px;
