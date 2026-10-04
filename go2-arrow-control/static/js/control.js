@@ -4,13 +4,23 @@
 let currentState = {
     inferenceActive: false,
     modelLoaded: false,
+    currentModel: null, // model info from the server (type, labels, commands, ...)
     isPilot: false,
     viewMode: 'local' // 'local' or 'pilot'
 };
 
+// Teachable Machine TensorFlow.js model running in this browser
+let browserModel = null;
+let browserModelFilename = null;
+let browserModelLoading = null;
+
 let inferenceInterval = null;
 let pilotFeedInterval = null;
+let frameInFlight = false;
 const INFERENCE_FPS = 10;
+const PILOT_FRAME_WIDTH = 320; // Size of the frames shared for the pilot view
+
+const COMMAND_ARROWS = { Forward: '↑', Right: '→', Left: '←', Backwards: '↓', Idle: '⏸' };
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeWebcam();
@@ -190,9 +200,13 @@ function initializeUploadForm() {
             });
             const data = await res.json();
             if (res.ok) {
-                showToast('Model uploaded!', 'success');
+                const warnings = data.model && data.model.warnings.length;
+                showToast(warnings ? 'Model uploaded, check the class names' : 'Model uploaded!', warnings ? 'warning' : 'success');
                 form.reset();
-                loadModelsList();
+                await loadModelsList();
+                // Preselect the new model and show how its classes map to robot moves
+                document.getElementById('model-select').value = data.filename;
+                renderModelMapping(data.model);
             } else {
                 showToast(data.error, 'error');
             }
@@ -239,16 +253,57 @@ async function loadModelsList() {
                 select.appendChild(opt);
             });
             
-            // If check existing current model
-            if (data.current) {
-                select.value = data.current;
-                currentState.modelLoaded = true;
-                updateButtons();
-            }
+            // Show the model that is currently loaded (shared by all groups)
+            const current = data.models.find(m => m.filename === data.current) || null;
+            if (current) select.value = current.filename;
+            setCurrentModel(current);
         }
     } catch (e) {
         showToast('Failed to load models list', 'error');
     }
+}
+
+function setCurrentModel(info) {
+    currentState.currentModel = info;
+    currentState.modelLoaded = !!info;
+    document.getElementById('model-status').textContent = info ? info.name : 'None';
+    renderModelMapping(info);
+    updateButtons();
+}
+
+function renderModelMapping(info) {
+    const el = document.getElementById('model-mapping');
+    if (!info) {
+        el.style.display = 'none';
+        return;
+    }
+
+    const rows = info.labels.map((label, i) => {
+        const cmd = info.commands[i];
+        const cls = info.mapping_method === 'name' && !info.recognised[i] ? ' class="unmapped"' : '';
+        return `<tr${cls}><td>${escapeHtml(label)}</td><td>→</td><td>${COMMAND_ARROWS[cmd] || ''} ${cmd}</td></tr>`;
+    }).join('');
+    const warnings = info.warnings.map(w => `<div class="mapping-warning">⚠️ ${escapeHtml(w)}</div>`).join('');
+
+    el.innerHTML = `<strong>${escapeHtml(info.name)}</strong>: your classes → robot moves<table>${rows}</table>${warnings}`;
+    el.style.display = 'block';
+}
+
+// Load the selected TF.js model into this browser (no-op if already loaded)
+async function ensureBrowserModel() {
+    const info = currentState.currentModel;
+    if (!info || info.type !== 'tfjs') return;
+    if (browserModel && browserModelFilename === info.filename) return;
+
+    if (!browserModelLoading) {
+        browserModelLoading = tmImage.load(info.model_url, info.metadata_url)
+            .then(model => {
+                browserModel = model;
+                browserModelFilename = info.filename;
+            })
+            .finally(() => { browserModelLoading = null; });
+    }
+    await browserModelLoading;
 }
 
 async function loadSelectedModel() {
@@ -274,17 +329,21 @@ async function loadSelectedModel() {
         });
         
         if (res.ok) {
+            const data = await res.json();
+            setCurrentModel(data.model);
+            if (data.model.type === 'tfjs') {
+                btn.textContent = 'Loading in browser...';
+                await ensureBrowserModel();
+            }
             showToast('Model loaded successfully', 'success');
-            currentState.modelLoaded = true;
-            document.getElementById('model-status').textContent = filename.split('_')[0];
             updateDisplay('Model Ready - Press Start', 'success');
-            updateButtons();
         } else {
             const err = await res.json();
             showToast(`Error: ${err.error}`, 'error');
         }
     } catch (e) {
-        showToast('Failed to connect to server', 'error');
+        console.error(e);
+        showToast('Failed to load model', 'error');
     } finally {
         btn.disabled = false;
         btn.textContent = 'Load Selected Model';
@@ -302,6 +361,8 @@ async function startInference() {
     updateDisplay('Starting control...', 'info');
 
     try {
+        await ensureBrowserModel();
+
         const res = await fetch('/start_inference', {
             method: 'POST'
         });
@@ -353,24 +414,49 @@ async function sendFrame() {
     }
 
     const video = document.getElementById('webcam');
+    const model = currentState.currentModel;
+    // Skip if the camera isn't ready or the previous frame is still being processed
+    if (!model || !video.videoWidth || frameInFlight) return;
+    frameInFlight = true;
+
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
-    
-    const image = canvas.toDataURL('image/jpeg', 0.8);
     const start = Date.now();
-    
+
     try {
-        const res = await fetch('/predict_frame', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ image })
-        });
-        
+        let res;
+        if (model.type === 'tfjs') {
+            // Same preprocessing as the Teachable Machine preview (centre crop, [-1,1])
+            await ensureBrowserModel();
+            const predictions = await browserModel.predict(video);
+
+            // Small frame for the pilot view on other devices
+            canvas.width = PILOT_FRAME_WIDTH;
+            canvas.height = Math.round(video.videoHeight * PILOT_FRAME_WIDTH / video.videoWidth);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            res = await fetch('/submit_prediction', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    probabilities: predictions.map(p => p.probability),
+                    image: canvas.toDataURL('image/jpeg', 0.7)
+                })
+            });
+        } else {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            res = await fetch('/predict_frame', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ image: canvas.toDataURL('image/jpeg', 0.8) })
+            });
+        }
+
         const data = await res.json();
+        if (data.model_changed) loadModelsList();
         const latency = Date.now() - start;
         document.getElementById('latency-val').textContent = latency;
         
@@ -388,6 +474,8 @@ async function sendFrame() {
         }
     } catch (e) {
         console.error(e);
+    } finally {
+        frameInFlight = false;
     }
 }
 
@@ -486,6 +574,12 @@ function startStatusPolling() {
                 rStatus.className = 'status-value ' + (data.robot_connected ? 'connected' : 'disconnected');
             }
             
+            // Another pilot may have loaded (or deleted) a model
+            const shownModel = currentState.currentModel ? currentState.currentModel.filename : null;
+            if ((data.current_model || null) !== shownModel) {
+                loadModelsList();
+            }
+
             // Sync local state if changed externally
             if (data.inference_enabled !== currentState.inferenceActive) {
                 if (data.inference_enabled && currentState.isPilot) {
@@ -532,6 +626,12 @@ function updateDisplay(text, type) {
         if (type === 'error') color = 'rgba(239, 68, 68, 0.8)';
         el.style.background = color;
     }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function showToast(msg, type='info') {

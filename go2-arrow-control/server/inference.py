@@ -5,13 +5,6 @@ Handles model loading and prediction
 
 import numpy as np
 import cv2
-"""
-TensorFlow Lite Inference Engine
-Handles model loading and prediction
-"""
-
-import numpy as np
-import cv2
 import json
 import os
 import logging
@@ -169,6 +162,22 @@ class ModelInference:
         except Exception as e:
             self.logger.error("Error during prediction: %s", e)
             raise
+
+    def predict_probabilities(self, image):
+        """Run inference and return the probability of every class (floats 0..1)."""
+        if not self.model_loaded:
+            raise ValueError("No model loaded")
+
+        input_data = self.preprocess_image(image)
+        with self.lock:
+            self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
+            self.interpreter.invoke()
+            output = self.interpreter.get_tensor(self.output_details[0]['index'])[0]
+
+        # Quantized models output 0..255
+        if self.output_details[0]['dtype'] == np.uint8:
+            return [float(p) / 255.0 for p in output]
+        return [float(p) for p in output]
 
     def get_classes(self):
         """Get list of class names"""

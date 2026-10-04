@@ -93,6 +93,34 @@ header h1 {
     display: block;
 }
 
+/* Class -> robot command mapping shown after loading a model */
+.model-mapping {
+    margin-top: 10px;
+    padding: 12px;
+    background: #f1f5f9;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.model-mapping table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.model-mapping td {
+    padding: 3px 4px;
+}
+
+.model-mapping .unmapped {
+    color: var(--warning-color);
+}
+
+.model-mapping .mapping-warning {
+    margin-top: 8px;
+    color: #b45309;
+}
+
 .doc-section {
     background: var(--bg-secondary);
     padding: 20px;

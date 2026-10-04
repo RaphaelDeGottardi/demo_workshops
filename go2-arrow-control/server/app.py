@@ -4,9 +4,13 @@ Teachable Machine model upload and robot control system
 """
 
 import os
+import re
 import time
 import json
 import uuid
+import shutil
+import zipfile
+import unicodedata
 from flask import (
     Flask,
     render_template,
@@ -16,6 +20,8 @@ from flask import (
     session,
     redirect,
     url_for,
+    send_from_directory,
+    abort,
 )
 from werkzeug.utils import secure_filename
 import base64
@@ -113,8 +119,23 @@ TEACHER_PASSWORD = os.environ.get("TEACHER_PASSWORD", "teacher123")
 
 # Configuration
 UPLOAD_FOLDER = "uploads/models"
-ALLOWED_EXTENSIONS = {"tflite"}
+ALLOWED_EXTENSIONS = {"tflite", "zip"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+
+# Robot commands, in the legacy class order used when class names can't be matched
+COMMANDS = ["Forward", "Right", "Left", "Backwards", "Idle"]
+
+# Teachable Machine class names (normalised: lowercase, no accents) -> robot command
+LABEL_SYNONYMS = {
+    "Forward": {"forward", "forwards", "vorwarts", "vorwaerts", "vor", "vorne",
+                "geradeaus", "up", "straight", "go", "↑"},
+    "Right": {"right", "rechts", "→"},
+    "Left": {"left", "links", "←"},
+    "Backwards": {"backwards", "backward", "back", "reverse", "ruckwarts",
+                  "rueckwaerts", "zuruck", "zurueck", "down", "sit", "↓"},
+    "Idle": {"idle", "nothing", "none", "background", "stop", "nichts",
+             "hintergrund", "leer", "neutral", "pause"},
+}
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -125,6 +146,7 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE
 inference_engine = None
 robot_controller = None
 current_model_name = None
+current_model_info = None  # get_model_info() of the loaded model (labels, commands, type)
 is_running = False
 last_command_time = 0
 COMMAND_TIMEOUT = 2.0  # Stop if no detection for 2 seconds
@@ -284,6 +306,192 @@ def stop_robot_and_inference():
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# --- Class name -> robot command mapping ---
+
+
+def normalize_label(label):
+    """Lowercase and strip accents, e.g. 'Rückwärts' -> 'ruckwarts'."""
+    decomposed = unicodedata.normalize("NFKD", str(label))
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).lower().strip()
+
+
+def match_label(label):
+    """Return the robot command for a class name, or None if it isn't recognised."""
+    norm = normalize_label(label)
+    for command, synonyms in LABEL_SYNONYMS.items():
+        if norm in synonyms:
+            return command
+
+    # Fall back to single words, e.g. "Arrow left" or "Forward ↑"
+    found = set()
+    for token in re.findall(r"[a-z]+|[↑↓←→]", norm):
+        for command, synonyms in LABEL_SYNONYMS.items():
+            if token in synonyms:
+                found.add(command)
+    return found.pop() if len(found) == 1 else None
+
+
+def map_labels(labels):
+    """Map class names to robot commands.
+
+    Returns (commands, recognised, warnings, method): commands[i] is the command for
+    class i (unrecognised classes become Idle), recognised[i] says whether the name
+    matched.
+    """
+    matched = [match_label(lbl) for lbl in labels]
+    warnings = []
+
+    if not any(matched) and len(labels) == len(COMMANDS):
+        warnings.append(
+            "None of the class names were recognised, so the class order is used: "
+            + ", ".join(COMMANDS) + "."
+        )
+        return list(COMMANDS), [False] * len(labels), warnings, "order"
+
+    for lbl, cmd in zip(labels, matched):
+        if cmd is None:
+            warnings.append(f"Class '{lbl}' was not recognised and is treated as Idle (no movement).")
+    for cmd in COMMANDS[:-1]:
+        if cmd not in matched:
+            warnings.append(f"No class for {cmd}, so the robot can't do that move.")
+
+    commands = [cmd or "Idle" for cmd in matched]
+    return commands, [cmd is not None for cmd in matched], warnings, "name"
+
+
+# --- Model storage ---
+# Two formats live in UPLOAD_FOLDER:
+#   <name>_<ts>/              Teachable Machine TensorFlow.js export (runs in the browser)
+#   <name>_<ts>.tflite        TFLite model (runs on the server), labels in <name>_<ts>_labels.txt
+
+
+def read_tflite_labels(path):
+    """Read a Teachable Machine labels.txt ('0 Forward' per line, index optional)."""
+    labels = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                labels.append(re.sub(r"^\d+\s+", "", line))
+    return labels
+
+
+def save_uploaded_model(file, base_name):
+    """Save an uploaded .tflite or Teachable Machine .zip. Returns the stored filename."""
+    folder = app.config["UPLOAD_FOLDER"]
+
+    if file.filename.lower().endswith(".tflite"):
+        filename = f"{base_name}.tflite"
+        file.save(os.path.join(folder, filename))
+        # Plain .tflite has no labels: assume the legacy class order
+        with open(os.path.join(folder, f"{base_name}_labels.txt"), "w") as lf:
+            lf.write("\n".join(COMMANDS) + "\n")
+        return filename
+
+    try:
+        zf = zipfile.ZipFile(BytesIO(file.read()))
+    except zipfile.BadZipFile:
+        raise ValueError("The file is not a valid .zip")
+
+    # Index members by file name, ignoring folders and macOS metadata
+    members = {}
+    for name in zf.namelist():
+        base = os.path.basename(name)
+        if base and not name.startswith("__MACOSX/") and not base.startswith("._"):
+            members.setdefault(base, name)
+
+    if "model.json" in members and "metadata.json" in members:
+        model_json = json.loads(zf.read(members["model.json"]))
+        metadata = json.loads(zf.read(members["metadata.json"]))
+        if not metadata.get("labels"):
+            raise ValueError("metadata.json contains no class labels")
+        weight_files = [
+            os.path.basename(p)
+            for group in model_json.get("weightsManifest", [])
+            for p in group.get("paths", [])
+        ]
+        missing = [w for w in weight_files if w not in members]
+        if missing:
+            raise ValueError(f"The zip is missing {', '.join(missing)}")
+
+        target = os.path.join(folder, base_name)
+        os.makedirs(target)
+        for fname in ["model.json", "metadata.json"] + weight_files:
+            with open(os.path.join(target, fname), "wb") as out:
+                out.write(zf.read(members[fname]))
+        return base_name
+
+    tflite_files = [m for m in members if m.endswith(".tflite")]
+    if tflite_files:
+        # Prefer the floating point model if both variants are present
+        chosen = "model_unquant.tflite" if "model_unquant.tflite" in tflite_files else tflite_files[0]
+        filename = f"{base_name}.tflite"
+        with open(os.path.join(folder, filename), "wb") as out:
+            out.write(zf.read(members[chosen]))
+        labels_path = os.path.join(folder, f"{base_name}_labels.txt")
+        with open(labels_path, "wb") as out:
+            if "labels.txt" in members:
+                out.write(zf.read(members["labels.txt"]))
+            else:
+                out.write(("\n".join(COMMANDS) + "\n").encode())
+        return filename
+
+    raise ValueError(
+        "This zip doesn't look like a Teachable Machine export "
+        "(expected model.json + metadata.json + weights.bin)"
+    )
+
+
+def get_model_info(filename):
+    """Describe a stored model: type, display name, labels and command mapping."""
+    path = os.path.join(app.config["UPLOAD_FOLDER"], os.path.basename(filename))
+    if os.path.isdir(path):
+        model_type = "tfjs"
+        with open(os.path.join(path, "metadata.json"), "r", encoding="utf-8") as f:
+            labels = json.load(f).get("labels", [])
+        size = sum(os.path.getsize(os.path.join(path, f)) for f in os.listdir(path))
+        stem = filename
+    elif filename.endswith(".tflite") and os.path.isfile(path):
+        model_type = "tflite"
+        labels_path = path[: -len(".tflite")] + "_labels.txt"
+        labels = read_tflite_labels(labels_path) if os.path.exists(labels_path) else list(COMMANDS)
+        size = os.path.getsize(path)
+        stem = filename[: -len(".tflite")]
+    else:
+        return None
+
+    # Stored as safe_name_YYYYMMDD_HHMMSS: strip the timestamp for display
+    parts = stem.rsplit("_", 2)
+    name = parts[0].replace("_", " ") if len(parts) == 3 else stem
+
+    commands, recognised, warnings, method = map_labels(labels)
+    info = {
+        "filename": filename,
+        "name": name,
+        "type": model_type,
+        "labels": labels,
+        "commands": commands,
+        "recognised": recognised,
+        "warnings": warnings,
+        "mapping_method": method,
+        "size": size,
+        "modified": datetime.fromtimestamp(os.path.getmtime(path)).isoformat(),
+    }
+    if model_type == "tfjs":
+        info["model_url"] = url_for("model_file", model=filename, file="model.json")
+        info["metadata_url"] = url_for("model_file", model=filename, file="metadata.json")
+    return info
+
+
+def model_ready():
+    """True if the loaded model can produce predictions (in the browser or on the server)."""
+    if current_model_info is None:
+        return False
+    if current_model_info["type"] == "tfjs":
+        return True
+    return inference_engine is not None and inference_engine.model_loaded
 
 
 @app.before_request
@@ -494,18 +702,177 @@ def get_logs():
         return jsonify({"error": str(e)}), 500
 
 
+def ensure_prediction_buffer():
+    global PREDICTION_BUFFER
+    if PREDICTION_BUFFER is None:
+        with PREDICTION_BUFFER_LOCK:
+            if PREDICTION_BUFFER is None:
+                PREDICTION_BUFFER = deque(maxlen=int(settings.get("buffer_size", 5)))
+
+
+def process_probabilities(probabilities):
+    """Turn one frame's class probabilities into a robot action.
+
+    Shared by the browser path (/submit_prediction) and the server TFLite path
+    (/predict_frame). Votes are robot commands, so two classes mapped to the same
+    command count together.
+    """
+    global last_command_time, last_command_sent_time, LAST_SENT_COMMAND_NAME, LAST_PREDICTION_DATA
+
+    labels = current_model_info["labels"]
+    commands = current_model_info["commands"]
+
+    top_index = max(range(len(probabilities)), key=lambda i: probabilities[i])
+    confidence = float(probabilities[top_index])
+    prediction = labels[top_index]
+    predicted_command = commands[top_index]
+
+    ensure_prediction_buffer()
+    with PREDICTION_BUFFER_LOCK:
+        PREDICTION_BUFFER.append(predicted_command)
+        buffer_snapshot = list(PREDICTION_BUFFER)
+
+    # Decide consensus only when buffer is full
+    command_to_execute = "Idle"
+    consensus_count = 0
+    most_common = None
+    if len(buffer_snapshot) >= int(settings.get("buffer_size", 5)):
+        counts = Counter(buffer_snapshot)
+        most_common, count = counts.most_common(1)[0]
+        consensus_count = int(count)
+        # Require that most_common is not 'Idle' and meets consensus_required
+        if most_common != "Idle" and count >= int(settings.get("consensus_required", 3)):
+            command_to_execute = most_common
+
+    # Enforce confidence threshold for the latest frame before counting it as valid
+    frame_valid = confidence >= settings.get("confidence_threshold", 0.65)
+
+    # Rate-control: only send commands at most once per command_interval
+    now = time.time()
+    command_executed = False
+
+    if command_to_execute != "Idle" and frame_valid:
+        # Enough consensus to move — check rate limit
+        interval = float(settings.get("command_interval", 0.1))
+        if now - last_command_sent_time >= interval:
+            if robot_controller and robot_controller.connected:
+                robot_controller.execute_command(command_to_execute, settings["max_speed"])
+                command_executed = True
+                last_command_sent_time = now
+                last_command_time = now
+                # record last sent command name to avoid repeated idle stops
+                LAST_SENT_COMMAND_NAME = command_to_execute
+    else:
+        # Not enough consensus — ensure robot is stopped
+        if robot_controller and robot_controller.connected:
+            # Only send stop/idle if last sent command was a movement (not already idle)
+            if LAST_SENT_COMMAND_NAME is not None and LAST_SENT_COMMAND_NAME != "Idle":
+                robot_controller.stop()
+                LAST_SENT_COMMAND_NAME = "Idle"
+            last_command_time = now
+
+    # Check for timeout (existing behavior)
+    time_since_last = time.time() - last_command_time if last_command_time > 0 else 0
+    if time_since_last > COMMAND_TIMEOUT and last_command_time > 0:
+        if robot_controller and robot_controller.connected:
+            # Only send stop if we previously sent a movement command
+            if LAST_SENT_COMMAND_NAME is not None and LAST_SENT_COMMAND_NAME != "Idle":
+                robot_controller.stop()
+                LAST_SENT_COMMAND_NAME = "Idle"
+
+    probabilities = [float(p) for p in probabilities]
+
+    # Update global prediction data for pilot view streamers
+    LAST_PREDICTION_DATA = {
+        "prediction": prediction,
+        "confidence": confidence,
+        "command_to_execute": command_to_execute,
+        "labels": labels,
+        "probabilities": probabilities,
+    }
+
+    return {
+        "prediction": prediction,
+        "predicted_command": predicted_command,
+        "confidence": confidence,
+        "labels": labels,
+        "probabilities": probabilities,
+        "threshold": settings["confidence_threshold"],
+        "buffer_size": int(settings.get("buffer_size", 5)),
+        "consensus_required": int(settings.get("consensus_required", 3)),
+        "buffer_snapshot": buffer_snapshot,
+        "most_common": most_common,
+        "consensus_count": consensus_count,
+        "command_to_execute": command_to_execute,
+        "command_executed": command_executed,
+        "time_since_last": time_since_last,
+    }
+
+
+def check_pilot_can_predict(expected_type):
+    """Return an error response if the current request may not drive the robot, else None."""
+    if not is_current_pilot():
+        return jsonify({"error": "Not the current pilot"}), 403
+    if not (model_ready() and settings["inference_enabled"]):
+        return (
+            jsonify(
+                {
+                    "error": "Inference not enabled or no model loaded",
+                    "model_loaded": model_ready(),
+                    "inference_enabled": settings["inference_enabled"],
+                }
+            ),
+            400,
+        )
+    if current_model_info["type"] != expected_type:
+        return jsonify({"error": "The loaded model changed, reload it", "model_changed": True}), 409
+    return None
+
+
+@app.route("/submit_prediction", methods=["POST"])
+def submit_prediction():
+    """
+    Accept class probabilities computed in the browser (TensorFlow.js model)
+    Expects: JSON {"probabilities": [float per class], "image": optional base64 thumbnail}
+    Returns: JSON with prediction, confidence, and command
+    """
+    global LAST_PILOT_FRAME, pilot_last_active
+
+    error = check_pilot_can_predict("tfjs")
+    if error:
+        return error
+
+    data = request.get_json(silent=True) or {}
+    probabilities = data.get("probabilities")
+    if (
+        not isinstance(probabilities, list)
+        or len(probabilities) != len(current_model_info["labels"])
+        or not all(isinstance(p, (int, float)) for p in probabilities)
+    ):
+        return jsonify({"error": "probabilities must list one number per class", "model_changed": True}), 400
+
+    if data.get("image"):
+        LAST_PILOT_FRAME = data["image"]
+    pilot_last_active = time.time()
+
+    try:
+        return jsonify(process_probabilities(probabilities))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/predict_frame", methods=["POST"])
 def predict_frame():
     """
-    Accept an image frame from the browser and return prediction
-    Expects: JSON with base64 encoded image
+    Accept an image frame from the browser and run the server-side TFLite model
+    Expects: JSON with base64 encoded image (already centre-cropped by the browser)
     Returns: JSON with prediction, confidence, and command
     """
-    global last_command_time, pilot_last_active, LAST_PILOT_FRAME, LAST_PREDICTION_DATA
+    global LAST_PILOT_FRAME, pilot_last_active
 
-    # Check if this user is the current pilot
-    if not is_current_pilot():
-        return jsonify({"error": "Not the current pilot"}), 403
+    error = check_pilot_can_predict("tflite")
+    if error:
+        return error
 
     try:
         data = request.get_json()
@@ -514,143 +881,18 @@ def predict_frame():
             return jsonify({"error": "No image provided"}), 400
 
         # Store as last pilot frame
-        global LAST_PILOT_FRAME, pilot_last_active
         LAST_PILOT_FRAME = data["image"]  # Already base64 encoded
         pilot_last_active = time.time()
 
-        # Decode base64 image
-        image_data = data["image"].split(",")[
-            1
-        ]  # Remove data:image/jpeg;base64, prefix
-        image_bytes = base64.b64decode(image_data)
+        # Decode base64 image (remove data:image/jpeg;base64, prefix)
+        image_bytes = base64.b64decode(data["image"].split(",")[1])
 
-        # Convert to numpy array.
         # Frames from browser canvas/PIL are RGB and should stay RGB for
         # Teachable Machine image models.
-        image = Image.open(BytesIO(image_bytes))
-        image_np = np.array(image)
+        image_np = np.array(Image.open(BytesIO(image_bytes)).convert("RGB"))
 
-        # Ensure prediction buffer initialized
-        global PREDICTION_BUFFER
-        if PREDICTION_BUFFER is None:
-            with PREDICTION_BUFFER_LOCK:
-                if PREDICTION_BUFFER is None:
-                    PREDICTION_BUFFER = deque(
-                        maxlen=int(settings.get("buffer_size", 5))
-                    )
-
-        # Run inference if model is loaded and inference is enabled
-        if not (
-            inference_engine
-            and inference_engine.model_loaded
-            and settings["inference_enabled"]
-        ):
-            return (
-                jsonify(
-                    {
-                        "error": "Inference not enabled or no model loaded",
-                        "model_loaded": inference_engine is not None
-                        and inference_engine.model_loaded,
-                        "inference_enabled": settings["inference_enabled"],
-                    }
-                ),
-                400,
-            )
-
-        prediction, confidence = inference_engine.predict(image_np)
-
-        # Append prediction to buffer
-        with PREDICTION_BUFFER_LOCK:
-            PREDICTION_BUFFER.append(prediction)
-            buffer_snapshot = list(PREDICTION_BUFFER)
-
-        # Decide consensus only when buffer is full
-        command_to_execute = "Idle"
-        consensus_count = 0
-        most_common = None
-        if len(buffer_snapshot) >= int(settings.get("buffer_size", 5)):
-            counts = Counter(buffer_snapshot)
-            most_common, count = counts.most_common(1)[0]
-            consensus_count = int(count)
-            # Require that most_common is not 'Idle' and meets consensus_required
-            if most_common.lower() != "idle" and count >= int(
-                settings.get("consensus_required", 3)
-            ):
-                command_to_execute = most_common
-            else:
-                command_to_execute = "Idle"
-
-        # Enforce confidence threshold for the latest frame before counting it as valid
-        frame_valid = confidence >= settings.get("confidence_threshold", 0.65)
-
-        # Rate-control: only send commands at most once per command_interval
-        global last_command_sent_time, last_command_time, LAST_SENT_COMMAND_NAME
-        now = time.time()
-        command_executed = False
-
-        time_since_last = now - last_command_time if last_command_time > 0 else 0
-
-        if command_to_execute != "Idle" and frame_valid:
-            # Enough consensus to move — check rate limit
-            interval = float(settings.get("command_interval", 0.1))
-            if now - last_command_sent_time >= interval:
-                if robot_controller and robot_controller.connected:
-                    robot_controller.execute_command(
-                        command_to_execute, settings["max_speed"]
-                    )
-                    command_executed = True
-                    last_command_sent_time = now
-                    last_command_time = now
-                    # record last sent command name to avoid repeated idle stops
-                    LAST_SENT_COMMAND_NAME = command_to_execute
-        else:
-            # Not enough consensus — ensure robot is stopped
-            if robot_controller and robot_controller.connected:
-                # Only send stop/idle if last sent command was a movement (not already idle)
-                if (
-                    LAST_SENT_COMMAND_NAME is not None
-                    and LAST_SENT_COMMAND_NAME.lower() != "idle"
-                ):
-                    robot_controller.stop()
-                    LAST_SENT_COMMAND_NAME = "Idle"
-                last_command_time = now
-
-        # Check for timeout (existing behavior)
-        time_since_last = (
-            time.time() - last_command_time if last_command_time > 0 else 0
-        )
-        if time_since_last > COMMAND_TIMEOUT and last_command_time > 0:
-            if robot_controller and robot_controller.connected:
-                # Only send stop if we previously sent a movement command
-                if (
-                    LAST_SENT_COMMAND_NAME is not None
-                    and LAST_SENT_COMMAND_NAME.lower() != "idle"
-                ):
-                    robot_controller.stop()
-                    LAST_SENT_COMMAND_NAME = "Idle"
-
-        # Update global prediction data for pilot view streamers
-        LAST_PREDICTION_DATA = {
-            "prediction": prediction,
-            "confidence": float(confidence),
-            "command_to_execute": command_to_execute,
-        }
-
-        return jsonify(
-            {
-                "prediction": prediction,
-                "confidence": float(confidence),
-                "threshold": settings["confidence_threshold"],
-                "buffer_size": int(settings.get("buffer_size", 5)),
-                "consensus_required": int(settings.get("consensus_required", 3)),
-                "buffer_snapshot": buffer_snapshot,
-                "most_common": most_common if len(buffer_snapshot) > 0 else None,
-                "consensus_count": consensus_count,
-                "command_to_execute": command_to_execute,
-                "command_executed": command_executed,
-                "time_since_last": time_since_last,
-            }
-        )
+        probabilities = inference_engine.predict_probabilities(image_np)
+        return jsonify(process_probabilities(probabilities))
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -658,7 +900,7 @@ def predict_frame():
 
 @app.route("/upload_model", methods=["POST"])
 def upload_model():
-    """Upload a new TFLite model"""
+    """Upload a Teachable Machine export (.zip, TensorFlow.js or TFLite) or a .tflite"""
     if "model" not in request.files:
         return jsonify({"error": "No model file provided"}), 400
 
@@ -672,30 +914,19 @@ def upload_model():
         return jsonify({"error": "Model name is required"}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({"error": "Only .tflite files are allowed"}), 400
+        return jsonify({"error": "Please upload the Teachable Machine .zip (or a .tflite file)"}), 400
 
     try:
-        # Create filename with timestamp
+        # Name with timestamp: safe_name_YYYYMMDD_HHMMSS
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_name = secure_filename(model_name)
-        filename = f"{safe_name}_{timestamp}.tflite"
-        filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        safe_name = secure_filename(model_name) or "model"
+        filename = save_uploaded_model(file, f"{safe_name}_{timestamp}")
+        info = get_model_info(filename)
 
-        file.save(filepath)
-
-        control_logger.info("Uploaded model: %s (%s)", model_name, filename)
-
-        # Create a default labels file if none provided by the user.
-        labels_path = filepath.replace(".tflite", "_labels.txt")
-        if not os.path.exists(labels_path):
-            try:
-                default_labels = ["Forward", "Right", "Left", "Backwards", "Idle"]
-                with open(labels_path, "w") as lf:
-                    for lbl in default_labels:
-                        lf.write(f"{lbl}\n")
-                control_logger.info("Created default labels file at: %s", labels_path)
-            except Exception as e:
-                control_logger.warning("Could not create labels file: %s", e)
+        control_logger.info(
+            "Uploaded model: %s (%s, %s, labels: %s)",
+            model_name, filename, info["type"], info["labels"],
+        )
 
         return jsonify(
             {
@@ -703,9 +934,12 @@ def upload_model():
                 "message": "Model uploaded successfully",
                 "filename": filename,
                 "model_name": model_name,
+                "model": info,
             }
         )
 
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -717,27 +951,13 @@ def list_models():
         models = []
         if os.path.exists(app.config["UPLOAD_FOLDER"]):
             for filename in os.listdir(app.config["UPLOAD_FOLDER"]):
-                if filename.endswith(".tflite"):
-                    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-
-                    # Correct name extraction: safe_name_YYYYMMDD_HHMMSS.tflite
-                    # We remove the timestamp suffix to get the original team/model name
-                    parts = filename.replace(".tflite", "").rsplit("_", 2)
-                    if len(parts) >= 3:
-                        name = parts[0].replace("_", " ")  # Restore spaces for display
-                    else:
-                        name = filename.split("_")[0]
-
-                    models.append(
-                        {
-                            "filename": filename,
-                            "name": name,
-                            "size": os.path.getsize(filepath),
-                            "modified": datetime.fromtimestamp(
-                                os.path.getmtime(filepath)
-                            ).isoformat(),
-                        }
-                    )
+                try:
+                    info = get_model_info(filename)
+                except Exception as e:
+                    control_logger.warning("Skipping unreadable model %s: %s", filename, e)
+                    continue
+                if info:
+                    models.append(info)
 
         models.sort(key=lambda x: x["modified"], reverse=True)
         return jsonify({"models": models, "current": current_model_name})
@@ -746,10 +966,19 @@ def list_models():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/model_files/<model>/<path:file>")
+def model_file(model, file):
+    """Serve TensorFlow.js model files to the browser"""
+    folder = os.path.abspath(os.path.join(app.config["UPLOAD_FOLDER"], os.path.basename(model)))
+    if not os.path.isdir(folder):
+        abort(404)
+    return send_from_directory(folder, file)
+
+
 @app.route("/load_model", methods=["POST"])
 def load_model():
-    """Load a specific model for inference"""
-    global inference_engine, current_model_name
+    """Select a model. TFLite models are loaded on the server, TF.js models in the pilot's browser."""
+    global inference_engine, current_model_name, current_model_info
 
     if not is_current_pilot():
         return jsonify({"error": "Not the current pilot"}), 403
@@ -758,20 +987,29 @@ def load_model():
     if not filename:
         return jsonify({"error": "Filename is required"}), 400
 
-    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    if not os.path.exists(filepath):
-        return jsonify({"error": "Model file not found"}), 404
-
     try:
-        if inference_engine is None:
-            inference_engine = ModelInference()
+        info = get_model_info(filename)
+        if info is None:
+            return jsonify({"error": "Model file not found"}), 404
 
-        inference_engine.load_model(filepath)
+        if info["type"] == "tflite":
+            if inference_engine is None:
+                inference_engine = ModelInference()
+            inference_engine.load_model(os.path.join(app.config["UPLOAD_FOLDER"], filename))
+            if inference_engine.num_classes and inference_engine.num_classes != len(info["labels"]):
+                info["warnings"].append(
+                    f"The model has {inference_engine.num_classes} outputs but "
+                    f"{len(info['labels'])} labels."
+                )
+        elif inference_engine:
+            inference_engine.unload_model()
+
         current_model_name = filename
+        current_model_info = info
 
-        control_logger.info("Loaded model: %s", filename)
+        control_logger.info("Loaded model: %s (%s)", filename, info["type"])
 
-        return jsonify({"success": True, "message": f"Loaded model: {filename}"})
+        return jsonify({"success": True, "message": f"Loaded model: {filename}", "model": info})
     except Exception as e:
         control_logger.error("Failed to load model: %s", e)
         return jsonify({"error": str(e)}), 500
@@ -780,10 +1018,10 @@ def load_model():
 @app.route("/delete_model", methods=["POST"])
 def delete_model():
     """Delete a model"""
-    global current_model_name, inference_engine
+    global current_model_name, current_model_info, inference_engine
 
     data = request.get_json()
-    filename = data.get("filename")
+    filename = os.path.basename(data.get("filename") or "")
 
     if not filename:
         return jsonify({"error": "Filename is required"}), 400
@@ -799,8 +1037,15 @@ def delete_model():
             if inference_engine:
                 inference_engine.unload_model()
             current_model_name = None
+            current_model_info = None
 
-        os.remove(filepath)
+        if os.path.isdir(filepath):
+            shutil.rmtree(filepath)
+        else:
+            os.remove(filepath)
+            labels_path = filepath[: -len(".tflite")] + "_labels.txt"
+            if os.path.exists(labels_path):
+                os.remove(labels_path)
 
         return jsonify(
             {"success": True, "message": f"Model {filename} deleted successfully"}
@@ -841,7 +1086,7 @@ def start_inference():
     if not is_current_pilot():
         return jsonify({"error": "Not the current pilot"}), 403
 
-    if not inference_engine or not inference_engine.model_loaded:
+    if not model_ready():
         return jsonify({"error": "No model loaded"}), 400
 
     try:
@@ -939,9 +1184,9 @@ def get_status():
     return jsonify(
         {
             "inference_enabled": settings["inference_enabled"],
-            "model_loaded": inference_engine is not None
-            and inference_engine.model_loaded,
+            "model_loaded": model_ready(),
             "current_model": current_model_name,
+            "model_type": current_model_info["type"] if current_model_info else None,
             "robot_connected": robot_controller is not None
             and robot_controller.connected,
             "settings": settings,

@@ -63,14 +63,12 @@ Connect to the Orin via SSH and run the following in separate sessions:
 
 ## 🧠 Teachable Machine Settings
 When guiding students to train their models, ensure:
-1. **Labels Order (Strict):**
-   1. `Forward`
-   2. `Right`
-   3. `Left`
-   4. `Sit`
-   5. `Idle`
+1. **Class names (any order):** `Forward`, `Right`, `Left`, `Backwards`, `Idle`.
+   German names (`Vorwärts`, `Rechts`, `Links`, `Rückwärts`, `Nichts`) and words like `up`, `down`, `back` or `background` work too.
+   If no class name is recognised, the order above is used instead.
 2. **Export Format:** 
-   - **Tensorflow Lite** -> **Floating point** (tflite)
+   - **Tensorflow.js** -> **Download my model** (fast, no conversion). Upload the `.zip` as it is, no unzipping.
+   - Fallback: Tensorflow Lite -> Floating point (slow, often fails), or the `.tflite` file directly.
 
 ---
 
@@ -123,7 +121,7 @@ ip addr show
    - **Left** - Draw a left arrow ←
    - **Backwards** - Draw a down arrow ↓
    - **Idle** - record the background from different angles and some unrelated images
- ! Important the order of the classes must match this description as this is how the app will interpret the commands.
+ ! Important: name the classes like this (the order doesn't matter), because the app uses the names to decide how the robot moves.
 4. For each class:
    - Draw the arrow on white paper with a thick marker
    - Take 150-300 photos from different angles
@@ -132,10 +130,8 @@ ip addr show
 
 5. Click "Train Model"
 6. Once trained, click "Export Model"
-7. Choose "TensorFlow Lite"
-8. Select "Floating Point" model (not Quantized!)
-9. Unzip the content
-10. Download the `.tflite` file
+7. Choose the "Tensorflow.js" tab
+8. Click "Download my model" (you get a `.zip`, don't unzip it)
 
 ### Step 2: Connect to the Robot's WiFi
 
@@ -148,9 +144,10 @@ Connect your laptop/tablet to the GO2 robot's WiFi hotspot:
 1. Open web browser and go to: `http://10.42.0.1:5000` (or Hosts's IP)
 2. Bypass the security warnings
 3. Enter your name or team name in "Model Name"
-4. Click "Choose File" and select your `.tflite` file
-5. Click "Upload Model"
-6. Wait for confirmation message
+4. Click "Choose File" and select your `.zip` file
+5. Check the table that appears: each of your classes should point to the right robot move
+6. Click "Upload Model"
+7. Wait for confirmation message
 
 ### Step 4: Activate Your Model
 
