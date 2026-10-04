@@ -48,10 +48,12 @@
 
             <!-- Right Panel: Maze -->
             <div class="panel maze-panel">
-                <h2>🐕 Maze</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin-bottom: 0;">🐕 Maze</h2>
+                    <div id="sim-timer" class="sim-timer">0.0 s</div>
+                </div>
                 <div class="maze-container">
                     <canvas id="maze-canvas"></canvas>
-                    <div id="sim-timer" class="sim-timer">0.0 s</div>
                     <div id="sim-countdown" class="sim-countdown" style="display: none;"></div>
                 </div>
                 <div class="control-buttons">

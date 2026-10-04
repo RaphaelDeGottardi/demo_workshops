@@ -167,10 +167,7 @@ header h1 {
 }
 
 .sim-timer {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.75);
     color: white;
     padding: 6px 14px;
     border-radius: 8px;
@@ -347,20 +344,24 @@ header h1 {
 }
 
 /* Camera Panel */
+/* Square like the Teachable Machine preview: shows exactly the centre square the model sees */
 .camera-container {
     position: relative;
     width: 100%;
+    max-width: 480px;
+    aspect-ratio: 1 / 1;
     background: #000;
     border-radius: 12px;
     overflow: hidden;
-    margin-bottom: 20px;
+    margin: 0 auto 20px;
 }
 
 #webcam, #pilot-feed {
     width: 100%;
-    height: auto;
+    height: 100%;
+    object-fit: cover; /* centre crop, same as the model input */
     display: block;
-    transform: scaleX(-1); /* Mirror the video for natural feel */
+    transform: scaleX(-1); /* Mirror the video for natural feel (display only) */
 }
 
 #canvas {

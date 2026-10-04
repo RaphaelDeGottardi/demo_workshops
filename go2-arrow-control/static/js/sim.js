@@ -151,8 +151,7 @@ async function predictFrame() {
     if (!browserModel || !video.videoWidth || frameInFlight) return;
     frameInFlight = true;
     try {
-        // Same preprocessing as the Teachable Machine preview (centre crop, [-1,1])
-        const predictions = await browserModel.predict(video);
+        const predictions = await predictWebcam(browserModel, video);
         const probabilities = predictions.map(p => p.probability);
         renderClassBars(predictions.map(p => p.className), probabilities);
 

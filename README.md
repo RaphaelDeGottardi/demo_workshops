@@ -163,6 +163,18 @@ Connect your laptop/tablet to the GO2 robot's WiFi hotspot:
 5. Click "⏸️ Stop Control" when done
 6. **EMERGENCY**: Big red "🛑 EMERGENCY STOP" button is always available
 
+### While another group drives: Maze Simulator
+
+Only one group can control the robot at a time. Everyone else can test their model in the simulator:
+
+1. Click **🏁 Maze Simulator** at the top of the control page (or open `/sim`)
+2. Select your model and click "Load Selected Model" (this never moves the real robot)
+3. Click "▶️ Start", wait for the 3-2-1 countdown, then steer the dog to the 🏁 with your arrows
+4. Your time goes on the leaderboard under your group name. Only a better time replaces it.
+   Use "Today" / "All time" to switch the leaderboard view, and "🔄 Restart" to try again without recording a time.
+
+Speed and AI settings are fixed in the simulator, so times are comparable. The leaderboard is stored on the Orin in `go2-arrow-control/data/leaderboard.json` (delete the file to reset it).
+
 ## 🤝 Contributing
 
 Contributions welcome! Contact me

@@ -16,7 +16,6 @@ let inferenceInterval = null;
 let pilotFeedInterval = null;
 let frameInFlight = false;
 const INFERENCE_FPS = 10;
-const PILOT_FRAME_WIDTH = 320; // Size of the frames shared for the pilot view
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeWebcam();
@@ -334,16 +333,16 @@ async function sendFrame() {
     const start = Date.now();
 
     try {
-        // Same preprocessing as the Teachable Machine preview (centre crop, [-1,1])
         await ensureBrowserModel();
-        const predictions = await browserModel.predict(video);
+        const predictions = await predictWebcam(browserModel, video);
         if (!currentState.inferenceActive) return; // stopped while predicting
         renderClassBars(predictions.map(p => p.className), predictions.map(p => p.probability));
 
-        // Small frame for the pilot view on other devices
-        canvas.width = PILOT_FRAME_WIDTH;
-        canvas.height = Math.round(video.videoHeight * PILOT_FRAME_WIDTH / video.videoWidth);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Small frame for the pilot view on other devices: the same centre square the model sees
+        const side = Math.min(video.videoWidth, video.videoHeight);
+        canvas.width = canvas.height = PILOT_FRAME_SIZE;
+        ctx.drawImage(video, (video.videoWidth - side) / 2, (video.videoHeight - side) / 2, side, side,
+                      0, 0, PILOT_FRAME_SIZE, PILOT_FRAME_SIZE);
 
         const res = await fetch('/submit_prediction', {
             method: 'POST',

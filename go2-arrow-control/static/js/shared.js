@@ -7,6 +7,16 @@ const COMMAND_ARROWS = { Forward: '↑', Right: '→', Left: '←', Backwards: '
 const CLASS_COLORS = [['#E67701', '#FFECE2'], ['#D84C6F', '#FFE9EC'], ['#794AEF', '#F1F0FF'], ['#1967D2', '#D2E3FC']];
 let shownBarLabels = null;
 
+// Teachable Machine's webcam has a "Flip" (mirror) setting, on by default. In workshop tests,
+// left/right worked correctly with unmirrored frames, so the model gets the camera image as is.
+const MIRROR_INPUT = false;
+const PILOT_FRAME_SIZE = 240; // Square frames shared for the pilot view
+
+// Predict on the webcam like the TM preview: centre square crop, scaled to [-1,1]
+function predictWebcam(model, video) {
+    return model.predict(video, MIRROR_INPUT);
+}
+
 // Teachable Machine TensorFlow.js model running in this browser (one at a time)
 let loadedTmModel = null;
 let loadedTmFilename = null;
