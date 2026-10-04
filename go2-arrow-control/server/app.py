@@ -461,6 +461,12 @@ def documentation():
     return render_template("documentation.html")
 
 
+@app.route("/sim")
+def simulator():
+    """Maze simulator: test a model without the robot"""
+    return render_template("sim.html")
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """Teacher login only"""
@@ -1065,6 +1071,102 @@ def get_status():
             "robot_connected": robot_controller is not None
             and robot_controller.connected,
             "settings": settings,
+        }
+    )
+
+
+# --- Maze simulator leaderboard ---
+# Stored as {maze_id: {model_name: {"YYYY-MM-DD": best_ms}}}. Values only ever go down,
+# so "today" is that day's entry and "all time" is the minimum over all days.
+
+LEADERBOARD_PATH = os.path.join(project_root, "data", "leaderboard.json")
+LEADERBOARD_LOCK = threading.Lock()
+SIM_TIME_LIMITS_MS = (1000, 3600 * 1000)
+
+
+def read_leaderboard():
+    if not os.path.exists(LEADERBOARD_PATH):
+        return {}
+    with open(LEADERBOARD_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def write_leaderboard(data):
+    os.makedirs(os.path.dirname(LEADERBOARD_PATH), exist_ok=True)
+    tmp_path = LEADERBOARD_PATH + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=1, ensure_ascii=False)
+    os.replace(tmp_path, LEADERBOARD_PATH)
+
+
+@app.route("/api/leaderboard", methods=["GET"])
+def get_leaderboard():
+    """Best simulator times per model. ?range=today (default) or all, ?maze_id=..."""
+    time_range = request.args.get("range", "today")
+    maze_id = request.args.get("maze_id", "maze-1")
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    with LEADERBOARD_LOCK:
+        records = read_leaderboard().get(maze_id, {})
+
+    entries = []
+    for name, days in records.items():
+        if time_range == "all":
+            date, best = min(days.items(), key=lambda item: item[1])
+        elif today in days:
+            date, best = today, days[today]
+        else:
+            continue
+        entries.append({"name": name, "time_ms": best, "date": date})
+
+    entries.sort(key=lambda e: e["time_ms"])
+    for rank, entry in enumerate(entries, start=1):
+        entry["rank"] = rank
+    return jsonify({"range": time_range, "maze_id": maze_id, "entries": entries})
+
+
+@app.route("/api/leaderboard", methods=["POST"])
+def submit_leaderboard_time():
+    """Record a finished simulator run. Only a better time changes the leaderboard."""
+    data = request.get_json(silent=True) or {}
+    maze_id = str(data.get("maze_id") or "maze-1")[:40]
+
+    info = get_model_info(os.path.basename(str(data.get("filename") or "")))
+    if info is None:
+        return jsonify({"error": "Model not found"}), 404
+
+    try:
+        time_ms = int(data.get("time_ms"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "time_ms must be a number"}), 400
+    lo, hi = SIM_TIME_LIMITS_MS
+    if time_ms < lo or time_ms > hi:
+        return jsonify({"error": f"time_ms must be between {lo} and {hi}"}), 400
+
+    name = info["name"]
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    with LEADERBOARD_LOCK:
+        board = read_leaderboard()
+        days = board.setdefault(maze_id, {}).setdefault(name, {})
+        previous_all = min(days.values()) if days else None
+        previous_today = days.get(today)
+
+        new_best_today = previous_today is None or time_ms < previous_today
+        if new_best_today:
+            days[today] = time_ms
+            write_leaderboard(board)
+
+    control_logger.info("Simulator run: %s finished %s in %.1fs", name, maze_id, time_ms / 1000)
+
+    return jsonify(
+        {
+            "name": name,
+            "time_ms": time_ms,
+            "best_today_ms": days[today],
+            "best_all_ms": min(days.values()),
+            "new_best_today": new_best_today,
+            "new_best_all": previous_all is None or time_ms < previous_all,
         }
     )
 

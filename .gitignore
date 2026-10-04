@@ -4,3 +4,4 @@ uploads/
 .vscode
 __pycache__
 go2-arrow-control/logs/*
+go2-arrow-control/data/

@@ -11,6 +11,7 @@
         <header>
             <h1>🤖 GO2 Control Center</h1>
             <div style="float:right; margin-top:-30px; display: flex; gap: 10px;">
+                <a href="/sim" class="btn btn-success">🏁 Maze Simulator</a>
                 <a href="/teacher" class="btn btn-secondary">Teacher Portal</a>
             </div>
             <div class="status-bar">
@@ -175,6 +176,7 @@
     <!-- Served locally: the workshop WiFi has no internet -->
     <script src="{{ url_for('static', filename='vendor/tf.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/teachablemachine-image.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/shared.js') }}"></script>
     <script src="{{ url_for('static', filename='js/control.js') }}"></script>
 </body>
 </html>

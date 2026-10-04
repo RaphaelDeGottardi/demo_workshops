@@ -9,10 +9,8 @@ let currentState = {
     viewMode: 'local' // 'local' or 'pilot'
 };
 
-// Teachable Machine TensorFlow.js model running in this browser
+// Teachable Machine TensorFlow.js model running in this browser (see shared.js)
 let browserModel = null;
-let browserModelFilename = null;
-let browserModelLoading = null;
 
 let inferenceInterval = null;
 let pilotFeedInterval = null;
@@ -20,16 +18,15 @@ let frameInFlight = false;
 const INFERENCE_FPS = 10;
 const PILOT_FRAME_WIDTH = 320; // Size of the frames shared for the pilot view
 
-const COMMAND_ARROWS = { Forward: '↑', Right: '→', Left: '←', Backwards: '↓', Idle: '⏸' };
-
-// [bar colour, track colour] per class, same as the Teachable Machine preview
-const CLASS_COLORS = [['#E67701', '#FFECE2'], ['#D84C6F', '#FFE9EC'], ['#794AEF', '#F1F0FF'], ['#1967D2', '#D2E3FC']];
-let shownBarLabels = null;
-
 document.addEventListener('DOMContentLoaded', () => {
     initializeWebcam();
     initializeControls();
-    initializeUploadForm();
+    initUploadForm(async (data) => {
+        await loadModelsList();
+        // Preselect the new model and show how its classes map to robot moves
+        document.getElementById('model-select').value = data.filename;
+        renderModelMapping(data.model);
+    });
     loadModelsList();
     loadSettings();
     startStatusPolling();
@@ -180,51 +177,6 @@ async function fetchPilotFrame() {
     }
 }
 
-// --- Upload Logic ---
-
-function initializeUploadForm() {
-    const form = document.getElementById('upload-form');
-    if (!form) return;
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const nameInput = document.getElementById('model-name');
-        const fileInput = document.getElementById('model-file');
-        const submitBtn = form.querySelector('button[type="submit"]');
-
-        const formData = new FormData();
-        formData.append('model_name', nameInput.value);
-        formData.append('model', fileInput.files[0]);
-
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Uploading...';
-
-        try {
-            const res = await fetch('/upload_model', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await res.json();
-            if (res.ok) {
-                const warnings = data.model && data.model.warnings.length;
-                showToast(warnings ? 'Model uploaded, check the class names' : 'Model uploaded!', warnings ? 'warning' : 'success');
-                form.reset();
-                await loadModelsList();
-                // Preselect the new model and show how its classes map to robot moves
-                document.getElementById('model-select').value = data.filename;
-                renderModelMapping(data.model);
-            } else {
-                showToast(data.error, 'error');
-            }
-        } catch (e) {
-            showToast('Upload failed', 'error');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Upload Model';
-        }
-    });
-}
-
 // --- Model Logic ---
 
 async function loadModelsList() {
@@ -233,32 +185,9 @@ async function loadModelsList() {
         const res = await fetch('/models');
         const data = await res.json();
         
-        // Keep first option
-        select.innerHTML = '<option value="">-- Choose a Model --</option>';
-        
         if (data.models) {
-            // Count occurrences of each model name to detect duplicates
-            const nameCounts = {};
-            data.models.forEach(m => {
-                nameCounts[m.name] = (nameCounts[m.name] || 0) + 1;
-            });
+            fillModelSelect(select, data.models);
 
-            data.models.forEach(model => {
-                const opt = document.createElement('option');
-                opt.value = model.filename;
-                
-                // If there are multiple models with the same name, show the timestamp to distinguish them.
-                // Otherwise, just show the clean model name.
-                if (nameCounts[model.name] > 1) {
-                    const dateObj = new Date(model.modified);
-                    const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    opt.textContent = `${model.name} (${timeStr})`;
-                } else {
-                    opt.textContent = model.name;
-                }
-                select.appendChild(opt);
-            });
-            
             // Show the model that is currently loaded (shared by all groups)
             const current = data.models.find(m => m.filename === data.current) || null;
             if (current) select.value = current.filename;
@@ -278,78 +207,14 @@ function setCurrentModel(info) {
     updateButtons();
 }
 
-// Show one bar per class like the Teachable Machine preview. probabilities may be null (all 0%).
-function renderClassBars(labels, probabilities) {
-    const panel = document.getElementById('class-output');
-    if (!labels || !labels.length) {
-        panel.style.display = 'none';
-        shownBarLabels = null;
-        return;
-    }
-
-    const container = document.getElementById('class-bars');
-    // Rebuild the rows only when the classes change, then just update the widths
-    if (JSON.stringify(labels) !== JSON.stringify(shownBarLabels)) {
-        container.innerHTML = labels.map((label, i) => {
-            const [color, track] = CLASS_COLORS[i % CLASS_COLORS.length];
-            return `<div class="bar-graph-holder">
-                <div class="bar-graph-label" style="color: ${color};">${escapeHtml(label)}</div>
-                <div class="bar-graph" style="background-color: ${track};">
-                    <div class="bar-graph-inner" style="background-color: ${color}; width: 0%;">
-                        <span class="bar-graph-value">0%</span>
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
-        shownBarLabels = labels.slice();
-    }
-
-    container.querySelectorAll('.bar-graph-inner').forEach((bar, i) => {
-        const percent = Math.round(100 * ((probabilities && probabilities[i]) || 0));
-        bar.style.width = percent + '%';
-        bar.firstElementChild.textContent = percent + '%';
-    });
-    panel.style.display = 'block';
-}
-
 function resetClassBars() {
     const model = currentState.currentModel;
     renderClassBars(model ? model.labels : null, null);
 }
 
-function renderModelMapping(info) {
-    const el = document.getElementById('model-mapping');
-    if (!info) {
-        el.style.display = 'none';
-        return;
-    }
-
-    const rows = info.labels.map((label, i) => {
-        const cmd = info.commands[i];
-        const cls = info.mapping_method === 'name' && !info.recognised[i] ? ' class="unmapped"' : '';
-        return `<tr${cls}><td>${escapeHtml(label)}</td><td>→</td><td>${COMMAND_ARROWS[cmd] || ''} ${cmd}</td></tr>`;
-    }).join('');
-    const warnings = info.warnings.map(w => `<div class="mapping-warning">⚠️ ${escapeHtml(w)}</div>`).join('');
-
-    el.innerHTML = `<strong>${escapeHtml(info.name)}</strong>: your classes → robot moves<table>${rows}</table>${warnings}`;
-    el.style.display = 'block';
-}
-
 // Load the selected TF.js model into this browser (no-op if already loaded)
 async function ensureBrowserModel() {
-    const info = currentState.currentModel;
-    if (!info) return;
-    if (browserModel && browserModelFilename === info.filename) return;
-
-    if (!browserModelLoading) {
-        browserModelLoading = tmImage.load(info.model_url, info.metadata_url)
-            .then(model => {
-                browserModel = model;
-                browserModelFilename = info.filename;
-            })
-            .finally(() => { browserModelLoading = null; });
-    }
-    await browserModelLoading;
+    browserModel = await loadBrowserModel(currentState.currentModel);
 }
 
 async function loadSelectedModel() {
@@ -647,32 +512,6 @@ function updateButtons() {
             input.disabled = !isPilot;
         }
     });
-}
-
-function updateDisplay(text, type) {
-    const el = document.getElementById('prediction-display');
-    if (el) {
-        el.textContent = text;
-        // Simple color mapping
-        let color = 'rgba(0,0,0,0.7)';
-        if (type === 'success') color = 'rgba(16, 185, 129, 0.8)';
-        if (type === 'warning') color = 'rgba(245, 158, 11, 0.8)';
-        if (type === 'error') color = 'rgba(239, 68, 68, 0.8)';
-        el.style.background = color;
-    }
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function showToast(msg, type='info') {
-    const toast = document.getElementById('toast');
-    toast.textContent = msg;
-    toast.className = `toast show ${type}`;
-    setTimeout(() => toast.className = 'toast', 3000);
 }
 
 // --- Pilot Management ---
