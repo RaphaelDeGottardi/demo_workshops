@@ -338,7 +338,7 @@ function renderModelMapping(info) {
 // Load the selected TF.js model into this browser (no-op if already loaded)
 async function ensureBrowserModel() {
     const info = currentState.currentModel;
-    if (!info || info.type !== 'tfjs') return;
+    if (!info) return;
     if (browserModel && browserModelFilename === info.filename) return;
 
     if (!browserModelLoading) {
@@ -377,10 +377,8 @@ async function loadSelectedModel() {
         if (res.ok) {
             const data = await res.json();
             setCurrentModel(data.model);
-            if (data.model.type === 'tfjs') {
-                btn.textContent = 'Loading in browser...';
-                await ensureBrowserModel();
-            }
+            btn.textContent = 'Loading in browser...';
+            await ensureBrowserModel();
             showToast('Model loaded successfully', 'success');
             updateDisplay('Model Ready - Press Start', 'success');
         } else {
@@ -471,38 +469,25 @@ async function sendFrame() {
     const start = Date.now();
 
     try {
-        let res;
-        if (model.type === 'tfjs') {
-            // Same preprocessing as the Teachable Machine preview (centre crop, [-1,1])
-            await ensureBrowserModel();
-            const predictions = await browserModel.predict(video);
-            if (!currentState.inferenceActive) return; // stopped while predicting
-            renderClassBars(predictions.map(p => p.className), predictions.map(p => p.probability));
+        // Same preprocessing as the Teachable Machine preview (centre crop, [-1,1])
+        await ensureBrowserModel();
+        const predictions = await browserModel.predict(video);
+        if (!currentState.inferenceActive) return; // stopped while predicting
+        renderClassBars(predictions.map(p => p.className), predictions.map(p => p.probability));
 
-            // Small frame for the pilot view on other devices
-            canvas.width = PILOT_FRAME_WIDTH;
-            canvas.height = Math.round(video.videoHeight * PILOT_FRAME_WIDTH / video.videoWidth);
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Small frame for the pilot view on other devices
+        canvas.width = PILOT_FRAME_WIDTH;
+        canvas.height = Math.round(video.videoHeight * PILOT_FRAME_WIDTH / video.videoWidth);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            res = await fetch('/submit_prediction', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    probabilities: predictions.map(p => p.probability),
-                    image: canvas.toDataURL('image/jpeg', 0.7)
-                })
-            });
-        } else {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-
-            res = await fetch('/predict_frame', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ image: canvas.toDataURL('image/jpeg', 0.8) })
-            });
-        }
+        const res = await fetch('/submit_prediction', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                probabilities: predictions.map(p => p.probability),
+                image: canvas.toDataURL('image/jpeg', 0.7)
+            })
+        });
 
         const data = await res.json();
         if (data.model_changed) loadModelsList();
@@ -512,7 +497,6 @@ async function sendFrame() {
         if (res.ok && currentState.inferenceActive) {
             const conf = (data.confidence * 100).toFixed(0);
             const cmd = data.command_to_execute;
-            if (model.type !== 'tfjs') renderClassBars(data.labels, data.probabilities);
 
             let text = `${data.prediction} (${conf}%)`;
             if (cmd && cmd !== 'Idle') {

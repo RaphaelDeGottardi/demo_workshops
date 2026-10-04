@@ -51,8 +51,7 @@ The hotspot should start automatically when the orin boots, find credentials bel
 ---
 
 ## Test model
-If you want to create your own model, follow the instructions in STUDENT_SETUP_GUIDE.md
-else you can use the example model in this repo: example_model.tflite
+Train a model on [Teachable Machine](https://teachablemachine.withgoogle.com/) as described in the student instructions in the root [README.md](../README.md), then export it via Tensorflow.js → Download my model and upload the `.zip`.
 
 
 ## 🔑 Required Credentials

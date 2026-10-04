@@ -19,7 +19,6 @@ More information on the Workshop in general can be found [here](https://sagerpas
 
 ## 🚀 Presentation & Resources
 - **Workshop Slides:** [sagerpascal.github.io/AI-workshop/workshop/](https://sagerpascal.github.io/AI-workshop/workshop/)
-- **Fallback Model:** [example_model.tflite](example_model.tflite) (Use if Teachable Machine export fails)
 - **Dev Docs:** [go2-arrow-control/DEV_README.md](go2-arrow-control/DEV_README.md)
 
 ---
@@ -68,7 +67,6 @@ When guiding students to train their models, ensure:
    If no class name is recognised, the order above is used instead.
 2. **Export Format:** 
    - **Tensorflow.js** -> **Download my model** (fast, no conversion). Upload the `.zip` as it is, no unzipping.
-   - Fallback: Tensorflow Lite -> Floating point (slow, often fails), or the `.tflite` file directly.
 
 ---
 

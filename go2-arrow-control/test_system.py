@@ -32,33 +32,13 @@ def test_imports():
         print_status("Flask", False, str(e))
         all_passed = False
     
-    # Test OpenCV
+    # Test pyzmq (robot bridge connection)
     try:
-        import cv2
-        print_status("OpenCV", True, f"Version: {cv2.__version__}")
+        import zmq
+        print_status("pyzmq", True, f"Version: {zmq.__version__}")
     except ImportError as e:
-        print_status("OpenCV", False, str(e))
+        print_status("pyzmq", False, str(e))
         all_passed = False
-    
-    # Test NumPy
-    try:
-        import numpy
-        print_status("NumPy", True, f"Version: {numpy.__version__}")
-    except ImportError as e:
-        print_status("NumPy", False, str(e))
-        all_passed = False
-    
-    # Test TFLite Runtime
-    try:
-        import tflite_runtime.interpreter as tflite
-        print_status("TFLite Runtime", True)
-    except ImportError:
-        try:
-            import tensorflow.lite as tflite
-            print_status("TensorFlow Lite", True, "Using TensorFlow")
-        except ImportError as e:
-            print_status("TFLite Runtime", False, str(e))
-            all_passed = False
     
     # Test Unitree SDK (optional)
     try:
@@ -69,28 +49,6 @@ def test_imports():
         # Not critical for testing
     
     return all_passed
-
-def test_camera():
-    """Test if OpenCV is available for image processing"""
-    print_header("Testing Image Processing (OpenCV)")
-    
-    try:
-        import cv2
-        import numpy as np
-        
-        # Create a test image
-        test_image = np.zeros((480, 640, 3), dtype=np.uint8)
-        
-        # Try to resize it (common operation)
-        resized = cv2.resize(test_image, (224, 224))
-        
-        print_status("OpenCV Operations", True, "Image processing working")
-        print("       Note: Camera access is via browser, not server-side")
-        return True
-        
-    except Exception as e:
-        print_status("OpenCV Test", False, str(e))
-        return False
 
 def test_directories():
     """Test if required directories exist"""
@@ -121,13 +79,13 @@ def test_files():
     all_passed = True
     required_files = [
         'server/app.py',
-        'server/inference.py',
         'server/robot_controller.py',
-        'static/index.html',
+        'static/control.html',
         'static/css/style.css',
-        'static/js/main.js',
-        'requirements.txt',
-        'README.md'
+        'static/js/control.js',
+        'static/vendor/tf.min.js',
+        'static/vendor/teachablemachine-image.min.js',
+        'requirements.txt'
     ]
     
     for file_path in required_files:
@@ -161,26 +119,6 @@ def test_robot_controller():
         
     except Exception as e:
         print_status("Robot Controller", False, str(e))
-        return False
-
-def test_inference():
-    """Test inference engine initialization"""
-    print_header("Testing Inference Engine")
-    
-    try:
-        sys.path.insert(0, 'server')
-        from inference import ModelInference
-        
-        inference = ModelInference()
-        print_status("Inference Engine Creation", True)
-        
-        classes = inference.get_classes()
-        print_status("Default Classes", True, f"Classes: {', '.join(classes)}")
-        
-        return True
-        
-    except Exception as e:
-        print_status("Inference Engine", False, str(e))
         return False
 
 def test_flask_app():
@@ -237,11 +175,9 @@ def main():
     
     # Run all tests
     results['imports'] = test_imports()
-    results['camera'] = test_camera()
     results['directories'] = test_directories()
     results['files'] = test_files()
     results['robot'] = test_robot_controller()
-    results['inference'] = test_inference()
     results['network'] = test_network()
     # Skip flask_app test as it may cause issues with imports
     
@@ -266,7 +202,6 @@ def main():
         print("\n⚠️  Some tests failed. Please check the errors above.")
         print("\nCommon issues:")
         print("  - Missing dependencies: Run 'pip3 install -r requirements.txt'")
-        print("  - No camera: Connect a USB webcam")
         print("  - Unitree SDK: Install from official repo (optional for testing)")
         return 1
 

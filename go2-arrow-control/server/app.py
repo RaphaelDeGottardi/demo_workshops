@@ -24,13 +24,10 @@ from flask import (
     abort,
 )
 from werkzeug.utils import secure_filename
-import base64
 import threading
 from collections import deque, Counter
 from datetime import datetime
 from io import BytesIO
-import numpy as np
-from PIL import Image
 
 import logging
 import sys
@@ -106,7 +103,6 @@ werkzeug_logger.propagate = False
 # Reduce root logger verbosity
 logging.getLogger().setLevel(logging.WARNING)
 
-from inference import ModelInference
 from robot_controller import GO2Controller
 
 app = Flask(__name__, static_folder="../static", template_folder="../static")
@@ -119,7 +115,7 @@ TEACHER_PASSWORD = os.environ.get("TEACHER_PASSWORD", "teacher123")
 
 # Configuration
 UPLOAD_FOLDER = "uploads/models"
-ALLOWED_EXTENSIONS = {"tflite", "zip"}
+ALLOWED_EXTENSIONS = {"zip"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 # Robot commands, in the legacy class order used when class names can't be matched
@@ -143,7 +139,6 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE
 
 # Global objects
-inference_engine = None
 robot_controller = None
 current_model_name = None
 current_model_info = None  # get_model_info() of the loaded model (labels, commands, type)
@@ -166,8 +161,8 @@ LAST_SENT_COMMAND_NAME = None
 LAST_PILOT_FRAME = None  # Stores the last frame sent by the pilot for others to see
 LAST_PREDICTION_DATA = None  # Stores prediction info for others to see
 
-# Settings
-settings = {"confidence_threshold": 0.65, "max_speed": 0.3, "inference_enabled": False}
+# Settings (max_speed 0.5 = the forward speed tuned at the first workshop)
+settings = {"confidence_threshold": 0.65, "max_speed": 0.5, "inference_enabled": False}
 
 # Command rate and consensus settings
 settings.setdefault("command_interval", 0.2)
@@ -362,34 +357,12 @@ def map_labels(labels):
 
 
 # --- Model storage ---
-# Two formats live in UPLOAD_FOLDER:
-#   <name>_<ts>/              Teachable Machine TensorFlow.js export (runs in the browser)
-#   <name>_<ts>.tflite        TFLite model (runs on the server), labels in <name>_<ts>_labels.txt
-
-
-def read_tflite_labels(path):
-    """Read a Teachable Machine labels.txt ('0 Forward' per line, index optional)."""
-    labels = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                labels.append(re.sub(r"^\d+\s+", "", line))
-    return labels
+# Each model is a Teachable Machine TensorFlow.js export, extracted to
+# UPLOAD_FOLDER/<name>_<ts>/ (model.json, metadata.json, weights.bin). It runs in the browser.
 
 
 def save_uploaded_model(file, base_name):
-    """Save an uploaded .tflite or Teachable Machine .zip. Returns the stored filename."""
-    folder = app.config["UPLOAD_FOLDER"]
-
-    if file.filename.lower().endswith(".tflite"):
-        filename = f"{base_name}.tflite"
-        file.save(os.path.join(folder, filename))
-        # Plain .tflite has no labels: assume the legacy class order
-        with open(os.path.join(folder, f"{base_name}_labels.txt"), "w") as lf:
-            lf.write("\n".join(COMMANDS) + "\n")
-        return filename
-
+    """Extract an uploaded Teachable Machine TensorFlow.js .zip. Returns the stored model name."""
     try:
         zf = zipfile.ZipFile(BytesIO(file.read()))
     except zipfile.BadZipFile:
@@ -402,96 +375,65 @@ def save_uploaded_model(file, base_name):
         if base and not name.startswith("__MACOSX/") and not base.startswith("._"):
             members.setdefault(base, name)
 
-    if "model.json" in members and "metadata.json" in members:
-        model_json = json.loads(zf.read(members["model.json"]))
-        metadata = json.loads(zf.read(members["metadata.json"]))
-        if not metadata.get("labels"):
-            raise ValueError("metadata.json contains no class labels")
-        weight_files = [
-            os.path.basename(p)
-            for group in model_json.get("weightsManifest", [])
-            for p in group.get("paths", [])
-        ]
-        missing = [w for w in weight_files if w not in members]
-        if missing:
-            raise ValueError(f"The zip is missing {', '.join(missing)}")
+    if "model.json" not in members or "metadata.json" not in members:
+        raise ValueError(
+            "This zip doesn't look like a Teachable Machine Tensorflow.js export "
+            "(expected model.json + metadata.json + weights.bin)"
+        )
 
-        target = os.path.join(folder, base_name)
-        os.makedirs(target)
-        for fname in ["model.json", "metadata.json"] + weight_files:
-            with open(os.path.join(target, fname), "wb") as out:
-                out.write(zf.read(members[fname]))
-        return base_name
+    model_json = json.loads(zf.read(members["model.json"]))
+    metadata = json.loads(zf.read(members["metadata.json"]))
+    if not metadata.get("labels"):
+        raise ValueError("metadata.json contains no class labels")
+    weight_files = [
+        os.path.basename(p)
+        for group in model_json.get("weightsManifest", [])
+        for p in group.get("paths", [])
+    ]
+    missing = [w for w in weight_files if w not in members]
+    if missing:
+        raise ValueError(f"The zip is missing {', '.join(missing)}")
 
-    tflite_files = [m for m in members if m.endswith(".tflite")]
-    if tflite_files:
-        # Prefer the floating point model if both variants are present
-        chosen = "model_unquant.tflite" if "model_unquant.tflite" in tflite_files else tflite_files[0]
-        filename = f"{base_name}.tflite"
-        with open(os.path.join(folder, filename), "wb") as out:
-            out.write(zf.read(members[chosen]))
-        labels_path = os.path.join(folder, f"{base_name}_labels.txt")
-        with open(labels_path, "wb") as out:
-            if "labels.txt" in members:
-                out.write(zf.read(members["labels.txt"]))
-            else:
-                out.write(("\n".join(COMMANDS) + "\n").encode())
-        return filename
-
-    raise ValueError(
-        "This zip doesn't look like a Teachable Machine export "
-        "(expected model.json + metadata.json + weights.bin)"
-    )
+    target = os.path.join(app.config["UPLOAD_FOLDER"], base_name)
+    os.makedirs(target)
+    for fname in ["model.json", "metadata.json"] + weight_files:
+        with open(os.path.join(target, fname), "wb") as out:
+            out.write(zf.read(members[fname]))
+    return base_name
 
 
 def get_model_info(filename):
-    """Describe a stored model: type, display name, labels and command mapping."""
+    """Describe a stored model: display name, labels, command mapping and file URLs."""
     path = os.path.join(app.config["UPLOAD_FOLDER"], os.path.basename(filename))
-    if os.path.isdir(path):
-        model_type = "tfjs"
-        with open(os.path.join(path, "metadata.json"), "r", encoding="utf-8") as f:
-            labels = json.load(f).get("labels", [])
-        size = sum(os.path.getsize(os.path.join(path, f)) for f in os.listdir(path))
-        stem = filename
-    elif filename.endswith(".tflite") and os.path.isfile(path):
-        model_type = "tflite"
-        labels_path = path[: -len(".tflite")] + "_labels.txt"
-        labels = read_tflite_labels(labels_path) if os.path.exists(labels_path) else list(COMMANDS)
-        size = os.path.getsize(path)
-        stem = filename[: -len(".tflite")]
-    else:
+    if not os.path.isfile(os.path.join(path, "metadata.json")):
         return None
 
+    with open(os.path.join(path, "metadata.json"), "r", encoding="utf-8") as f:
+        labels = json.load(f).get("labels", [])
+
     # Stored as safe_name_YYYYMMDD_HHMMSS: strip the timestamp for display
-    parts = stem.rsplit("_", 2)
-    name = parts[0].replace("_", " ") if len(parts) == 3 else stem
+    parts = filename.rsplit("_", 2)
+    name = parts[0].replace("_", " ") if len(parts) == 3 else filename
 
     commands, recognised, warnings, method = map_labels(labels)
-    info = {
+    return {
         "filename": filename,
         "name": name,
-        "type": model_type,
         "labels": labels,
         "commands": commands,
         "recognised": recognised,
         "warnings": warnings,
         "mapping_method": method,
-        "size": size,
+        "size": sum(os.path.getsize(os.path.join(path, f)) for f in os.listdir(path)),
         "modified": datetime.fromtimestamp(os.path.getmtime(path)).isoformat(),
+        "model_url": url_for("model_file", model=filename, file="model.json"),
+        "metadata_url": url_for("model_file", model=filename, file="metadata.json"),
     }
-    if model_type == "tfjs":
-        info["model_url"] = url_for("model_file", model=filename, file="model.json")
-        info["metadata_url"] = url_for("model_file", model=filename, file="metadata.json")
-    return info
 
 
 def model_ready():
-    """True if the loaded model can produce predictions (in the browser or on the server)."""
-    if current_model_info is None:
-        return False
-    if current_model_info["type"] == "tfjs":
-        return True
-    return inference_engine is not None and inference_engine.model_loaded
+    """True if a model is selected (it runs in the pilot's browser)."""
+    return current_model_info is not None
 
 
 @app.before_request
@@ -713,9 +655,8 @@ def ensure_prediction_buffer():
 def process_probabilities(probabilities):
     """Turn one frame's class probabilities into a robot action.
 
-    Shared by the browser path (/submit_prediction) and the server TFLite path
-    (/predict_frame). Votes are robot commands, so two classes mapped to the same
-    command count together.
+    The probabilities come from the pilot's browser (/submit_prediction). Votes are
+    robot commands, so two classes mapped to the same command count together.
     """
     global last_command_time, last_command_sent_time, LAST_SENT_COMMAND_NAME, LAST_PREDICTION_DATA
 
@@ -809,8 +750,15 @@ def process_probabilities(probabilities):
     }
 
 
-def check_pilot_can_predict(expected_type):
-    """Return an error response if the current request may not drive the robot, else None."""
+@app.route("/submit_prediction", methods=["POST"])
+def submit_prediction():
+    """
+    Accept class probabilities computed in the browser (TensorFlow.js model)
+    Expects: JSON {"probabilities": [float per class], "image": optional base64 thumbnail}
+    Returns: JSON with prediction, confidence, and command
+    """
+    global LAST_PILOT_FRAME, pilot_last_active
+
     if not is_current_pilot():
         return jsonify({"error": "Not the current pilot"}), 403
     if not (model_ready() and settings["inference_enabled"]):
@@ -824,23 +772,6 @@ def check_pilot_can_predict(expected_type):
             ),
             400,
         )
-    if current_model_info["type"] != expected_type:
-        return jsonify({"error": "The loaded model changed, reload it", "model_changed": True}), 409
-    return None
-
-
-@app.route("/submit_prediction", methods=["POST"])
-def submit_prediction():
-    """
-    Accept class probabilities computed in the browser (TensorFlow.js model)
-    Expects: JSON {"probabilities": [float per class], "image": optional base64 thumbnail}
-    Returns: JSON with prediction, confidence, and command
-    """
-    global LAST_PILOT_FRAME, pilot_last_active
-
-    error = check_pilot_can_predict("tfjs")
-    if error:
-        return error
 
     data = request.get_json(silent=True) or {}
     probabilities = data.get("probabilities")
@@ -861,46 +792,9 @@ def submit_prediction():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/predict_frame", methods=["POST"])
-def predict_frame():
-    """
-    Accept an image frame from the browser and run the server-side TFLite model
-    Expects: JSON with base64 encoded image (already centre-cropped by the browser)
-    Returns: JSON with prediction, confidence, and command
-    """
-    global LAST_PILOT_FRAME, pilot_last_active
-
-    error = check_pilot_can_predict("tflite")
-    if error:
-        return error
-
-    try:
-        data = request.get_json()
-
-        if not data or "image" not in data:
-            return jsonify({"error": "No image provided"}), 400
-
-        # Store as last pilot frame
-        LAST_PILOT_FRAME = data["image"]  # Already base64 encoded
-        pilot_last_active = time.time()
-
-        # Decode base64 image (remove data:image/jpeg;base64, prefix)
-        image_bytes = base64.b64decode(data["image"].split(",")[1])
-
-        # Frames from browser canvas/PIL are RGB and should stay RGB for
-        # Teachable Machine image models.
-        image_np = np.array(Image.open(BytesIO(image_bytes)).convert("RGB"))
-
-        probabilities = inference_engine.predict_probabilities(image_np)
-        return jsonify(process_probabilities(probabilities))
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 @app.route("/upload_model", methods=["POST"])
 def upload_model():
-    """Upload a Teachable Machine export (.zip, TensorFlow.js or TFLite) or a .tflite"""
+    """Upload a Teachable Machine Tensorflow.js export (.zip)"""
     if "model" not in request.files:
         return jsonify({"error": "No model file provided"}), 400
 
@@ -914,7 +808,7 @@ def upload_model():
         return jsonify({"error": "Model name is required"}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({"error": "Please upload the Teachable Machine .zip (or a .tflite file)"}), 400
+        return jsonify({"error": "Please upload the Teachable Machine Tensorflow.js .zip"}), 400
 
     try:
         # Name with timestamp: safe_name_YYYYMMDD_HHMMSS
@@ -924,8 +818,7 @@ def upload_model():
         info = get_model_info(filename)
 
         control_logger.info(
-            "Uploaded model: %s (%s, %s, labels: %s)",
-            model_name, filename, info["type"], info["labels"],
+            "Uploaded model: %s (%s, labels: %s)", model_name, filename, info["labels"]
         )
 
         return jsonify(
@@ -977,8 +870,8 @@ def model_file(model, file):
 
 @app.route("/load_model", methods=["POST"])
 def load_model():
-    """Select a model. TFLite models are loaded on the server, TF.js models in the pilot's browser."""
-    global inference_engine, current_model_name, current_model_info
+    """Select the shared model. It is then loaded and run in the pilot's browser."""
+    global current_model_name, current_model_info
 
     if not is_current_pilot():
         return jsonify({"error": "Not the current pilot"}), 403
@@ -992,22 +885,10 @@ def load_model():
         if info is None:
             return jsonify({"error": "Model file not found"}), 404
 
-        if info["type"] == "tflite":
-            if inference_engine is None:
-                inference_engine = ModelInference()
-            inference_engine.load_model(os.path.join(app.config["UPLOAD_FOLDER"], filename))
-            if inference_engine.num_classes and inference_engine.num_classes != len(info["labels"]):
-                info["warnings"].append(
-                    f"The model has {inference_engine.num_classes} outputs but "
-                    f"{len(info['labels'])} labels."
-                )
-        elif inference_engine:
-            inference_engine.unload_model()
-
         current_model_name = filename
         current_model_info = info
 
-        control_logger.info("Loaded model: %s (%s)", filename, info["type"])
+        control_logger.info("Loaded model: %s", filename)
 
         return jsonify({"success": True, "message": f"Loaded model: {filename}", "model": info})
     except Exception as e:
@@ -1018,7 +899,7 @@ def load_model():
 @app.route("/delete_model", methods=["POST"])
 def delete_model():
     """Delete a model"""
-    global current_model_name, current_model_info, inference_engine
+    global current_model_name, current_model_info
 
     data = request.get_json()
     filename = os.path.basename(data.get("filename") or "")
@@ -1034,8 +915,6 @@ def delete_model():
     try:
         # Unload if it's the current model
         if current_model_name == filename:
-            if inference_engine:
-                inference_engine.unload_model()
             current_model_name = None
             current_model_info = None
 
@@ -1043,9 +922,6 @@ def delete_model():
             shutil.rmtree(filepath)
         else:
             os.remove(filepath)
-            labels_path = filepath[: -len(".tflite")] + "_labels.txt"
-            if os.path.exists(labels_path):
-                os.remove(labels_path)
 
         return jsonify(
             {"success": True, "message": f"Model {filename} deleted successfully"}
@@ -1186,7 +1062,6 @@ def get_status():
             "inference_enabled": settings["inference_enabled"],
             "model_loaded": model_ready(),
             "current_model": current_model_name,
-            "model_type": current_model_info["type"] if current_model_info else None,
             "robot_connected": robot_controller is not None
             and robot_controller.connected,
             "settings": settings,
