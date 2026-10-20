@@ -12,8 +12,8 @@ More information on the Workshop in general can be found [here](https://sagerpas
 
 | Page| url | Info |
 | :--- | :--- | :--- |
-| **Direct Control Page** | [http://192.168.1.243:8080/](http://192.168.1.243:8080/) | (Try `https` if `http` fails) |
-| **Workshop App** | [http://192.168.1.243:5000/](http://192.168.1.243:5000/) | (Try `https` if `http` fails) |
+| **Direct Control Page** | [http://192.168.1.243:8080/](http://192.168.1.243:8080/) |
+| **Workshop App** | [https://192.168.1.243:5000/](http://192.168.1.243:5000/)  |
 
 ---
 
