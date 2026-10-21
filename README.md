@@ -18,7 +18,7 @@ More information on the Workshop in general can be found [here](https://sagerpas
 ---
 
 ## 🚀 Presentation & Resources
-- **Workshop Slides:** [sagerpascal.github.io/AI-workshop/workshop/](https://sagerpascal.github.io/AI-workshop/workshop/)
+- **Workshop Slides:** [raphaeldegottardi.github.io/demo_workshops/slides/workshop_p1.html](https://raphaeldegottardi.github.io/demo_workshops/slides/workshop_p1.html) - find settings on the bottom left.
 - **Dev Docs:** [go2-arrow-control/DEV_README.md](go2-arrow-control/DEV_README.md)
 
 ---
