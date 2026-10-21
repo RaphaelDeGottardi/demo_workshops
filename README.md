@@ -20,6 +20,7 @@ More information on the Workshop in general can be found [here](https://sagerpas
 ## 🚀 Presentation & Resources
 - **Workshop Slides:** [raphaeldegottardi.github.io/demo_workshops/slides/workshop_p1.html](https://raphaeldegottardi.github.io/demo_workshops/slides/workshop_p1.html) - find settings on the bottom left.
 - **Dev Docs:** [go2-arrow-control/DEV_README.md](go2-arrow-control/DEV_README.md)
+- **Workshop Organizationl Infos:** [WORKSHOP_PLANUNG.md](WORKSHOP_PLANUNG.md) - description, requirements and checklist to forward to organizers.
 
 ---
 
