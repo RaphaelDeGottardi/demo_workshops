@@ -1,0 +1,1193 @@
+/* Workshop additions: team slide layout and the settings panel. (1rem = 10px in WebSlides) */
+
+/* ---------- Team slide ---------- */
+
+.team {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4rem;
+    align-items: center;
+    margin-top: 3.2rem;
+}
+
+.team.has-others {
+    grid-template-columns: 1fr 26rem;
+}
+
+.team ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.team li {
+    margin: 0;
+    line-height: 1.4;
+}
+
+.team li::before {
+    content: none;
+}
+
+.team-leads {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 3.2rem;
+}
+
+/* White cards keep names readable on top of a slide background photo */
+.team-card {
+    width: 26rem;
+    padding: 1.2rem 1.2rem 2rem;
+    border-radius: 1.2rem;
+    background: #fff;
+    color: #222;
+    text-align: center;
+    box-shadow: 0 1.6rem 4rem rgba(0, 0, 0, .3);
+}
+
+.team-card img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    border-radius: .6rem;
+    margin-bottom: 1.6rem;
+}
+
+.team-card h4 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0 0 .4rem;
+}
+
+.team-card p {
+    font-size: 1.6rem;
+    margin: 0;
+    opacity: .7;
+}
+
+.team-others {
+    padding: 2rem 2.4rem .6rem;
+    border-radius: 1.2rem;
+    background: rgba(255, 255, 255, .92);
+    color: #222;
+    box-shadow: 0 1.6rem 4rem rgba(0, 0, 0, .3);
+}
+
+.team-others-title {
+    font-size: 1.3rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    opacity: .6;
+    margin: 0 0 1.6rem;
+}
+
+.team-others li {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    margin-bottom: 1.4rem;
+}
+
+.team-others img {
+    width: 4.8rem;
+    height: 4.8rem;
+    flex: none;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.team-others span {
+    font-size: 1.3rem;
+    line-height: 1.35;
+    opacity: .8;
+}
+
+.team-others strong {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+@media (max-width: 768px) {
+    .team.has-others {
+        grid-template-columns: 1fr;
+    }
+
+    .team-card {
+        width: 16rem;
+    }
+}
+
+/* ---------- "Links oder rechts?" question slides ---------- */
+
+section.lr {
+    background: linear-gradient(90deg, #62b 0 50%, #0b7f86 50% 100%);
+    color: #fff;
+}
+
+.lr .wrap {
+    text-align: center;
+}
+
+.lr-kicker {
+    font-size: 1.6rem;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    opacity: .85;
+}
+
+.lr h2.lr-statement {
+    display: inline-block;
+    max-width: 80rem;
+    padding: 3.2rem 4.8rem;
+    border-radius: 1.2rem;
+    background: #fff;
+    color: #222;
+    box-shadow: 0 2rem 5rem rgba(0, 0, 0, .25);
+    font-size: 4.8rem;
+    line-height: 1.2;
+}
+
+.lr-sides {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6.4rem;
+    font-size: 4.8rem;
+    font-weight: 700;
+}
+
+.lr-left::before {
+    content: "\2190\00a0";
+}
+
+.lr-right::after {
+    content: "\00a0\2192";
+}
+
+@media (max-width: 768px) {
+    .lr h2.lr-statement {
+        padding: 2.4rem;
+        font-size: 3.2rem;
+    }
+
+    .lr-sides {
+        font-size: 3.2rem;
+    }
+}
+
+/* ---------- "Gefahren von KI" slides ---------- */
+
+/* One accent colour per danger, shared by the overview, the detail slide and the tips. */
+.danger-betrug { --danger: #d9473b; }
+.danger-deepfake { --danger: #6622bb; }
+.danger-bias { --danger: #0b7f86; }
+.danger-privacy { --danger: #c27700; }
+
+.danger-icon {
+    width: 1em;
+    height: 1em;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vertical-align: -0.15em;
+}
+
+.danger-overview {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2.4rem;
+    margin: 4.8rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.danger-overview li {
+    margin: 0;
+    padding: 3.2rem 2rem;
+    border-top: .6rem solid var(--danger);
+    border-radius: .8rem;
+    background: #fff;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, .08);
+    text-align: center;
+    line-height: 1.4;
+}
+
+.danger-overview li::before {
+    content: none;
+}
+
+.danger-overview .danger-icon {
+    font-size: 6.4rem;
+    color: var(--danger);
+}
+
+.danger-overview h3 {
+    margin: 1.6rem 0 .8rem;
+    font-size: 2.6rem;
+    font-weight: 700;
+}
+
+.danger-overview p {
+    margin: 0;
+    font-size: 1.6rem;
+    line-height: 1.4;
+    opacity: .75;
+}
+
+.danger-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4.8rem;
+    align-items: center;
+}
+
+.danger-label {
+    display: inline-flex;
+    align-items: center;
+    gap: .8rem;
+    margin-bottom: 1.2rem;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--danger, #6622bb);
+}
+
+.danger-label .danger-icon {
+    font-size: 2.4rem;
+}
+
+.danger h2 {
+    margin-bottom: 2.4rem;
+    font-size: 4rem;
+    line-height: 1.15;
+}
+
+.danger p {
+    line-height: 1.5;
+    margin-bottom: 2.4rem;
+}
+
+.danger-example {
+    margin-bottom: 2.4rem;
+    padding: 1.6rem 2rem;
+    border-left: .5rem solid var(--danger);
+    border-radius: .4rem;
+    background: rgba(0, 0, 0, .04);
+    line-height: 1.5;
+}
+
+.danger-example strong {
+    display: block;
+    margin-bottom: .4rem;
+    font-size: 1.4rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--danger);
+}
+
+.danger .danger-tip {
+    margin: 0;
+    font-weight: 700;
+}
+
+.danger .danger-tip::before {
+    content: "Tipp: ";
+    color: var(--danger);
+}
+
+.danger-visual {
+    position: relative;
+    margin: 0;
+}
+
+.danger-visual img {
+    display: block;
+}
+
+.danger-visual img,
+.danger-visual .img-placeholder {
+    width: 100%;
+    max-height: 60vh;
+    object-fit: cover;
+    border-radius: 1.2rem;
+    box-shadow: 0 1.6rem 4rem rgba(0, 0, 0, .18);
+}
+
+.danger-visual-center {
+    max-width: 64rem;
+    margin: 2.4rem auto 0;
+}
+
+.danger-quiz h2 {
+    font-size: 5.6rem;
+}
+
+.danger-stamp {
+    position: absolute;
+    top: 2.4rem;
+    right: -1.2rem;
+    padding: .8rem 2.4rem;
+    border: .4rem solid #d9473b;
+    border-radius: .6rem;
+    background: rgba(255, 255, 255, .92);
+    color: #d9473b;
+    font-size: 3.2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    transform: rotate(8deg);
+}
+
+/* Bias bar chart */
+.danger-chart {
+    padding: 3.2rem;
+    border-radius: 1.2rem;
+    background: #fff;
+    box-shadow: 0 1.6rem 4rem rgba(0, 0, 0, .1);
+}
+
+.danger-chart .danger-chart-title {
+    margin-bottom: 3.2rem;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.danger-bar {
+    display: grid;
+    grid-template-columns: 16rem 1fr 11rem;
+    align-items: center;
+    gap: 1.6rem;
+    margin-bottom: 2.4rem;
+}
+
+.danger-bar-label {
+    font-size: 1.6rem;
+    line-height: 1.3;
+}
+
+.danger-bar-track {
+    height: 4rem;
+    border-radius: .4rem;
+    background: #eef0f3;
+    overflow: hidden;
+}
+
+.danger-bar-fill {
+    display: block;
+    height: 100%;
+    min-width: .4rem;
+    background: #9aa3ad;
+}
+
+.danger-bar.is-high .danger-bar-fill {
+    background: var(--danger);
+}
+
+.danger-bar-value {
+    white-space: nowrap;
+    font-size: 2.8rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.danger-bar.is-high .danger-bar-value {
+    color: var(--danger);
+}
+
+.danger-chart figcaption {
+    margin-top: 1.6rem;
+    font-size: 1.3rem;
+    line-height: 1.4;
+    opacity: .6;
+}
+
+/* Shown by workshop.js until the image file has been added */
+.img-placeholder {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1.2rem;
+    aspect-ratio: 4 / 3;
+    padding: 3.2rem;
+    border: .3rem dashed #b8bec6;
+    background: #f1f3f5;
+    color: #555;
+    font-size: 1.6rem;
+    line-height: 1.4;
+    text-align: center;
+}
+
+.img-placeholder strong {
+    font-size: 2rem;
+}
+
+.img-placeholder code {
+    font-size: 1.3rem;
+    word-break: break-all;
+}
+
+@media (max-width: 768px) {
+    .danger-overview {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .danger-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .danger-bar {
+        grid-template-columns: 1fr 6rem;
+    }
+
+    .danger-bar-track {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+}
+
+/* ---------- "Programmieren vs. Lernen" slides ---------- */
+
+.pvl-kicker {
+    margin-bottom: .8rem;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #6622bb;
+}
+
+.pvl-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4.8rem;
+    align-items: center;
+    margin-top: 3.2rem;
+}
+
+.pvl-split pre {
+    margin: 0;
+    font-size: 1.8rem;
+    line-height: 1.5;
+}
+
+.pvl-takeaway {
+    margin-top: 3.2rem;
+    padding-top: 2.4rem;
+    border-top: 1px solid rgba(0, 0, 0, .1);
+    line-height: 1.5;
+}
+
+.pvl-flow-arrow {
+    font-size: 4.8rem;
+    color: #9aa3ad;
+}
+
+/* WebSlides gives figures line-height 0, which collapses captions */
+.pvl-sees figcaption,
+.pvl-examples figcaption,
+.pvl-caption {
+    line-height: 1.4;
+}
+
+.pvl-drawing {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: .6rem;
+    box-shadow: 0 .6rem 1.6rem rgba(0, 0, 0, .12);
+}
+
+/* Arrow keys in the usual inverted-T layout */
+.pvl-keys {
+    display: grid;
+    grid-template-columns: repeat(3, 12rem);
+    grid-template-areas: ". up ." "left down right";
+    gap: 1.6rem;
+    justify-content: center;
+}
+
+.pvl-key.is-up { grid-area: up; }
+.pvl-key.is-left { grid-area: left; }
+.pvl-key.is-down { grid-area: down; }
+.pvl-key.is-right { grid-area: right; }
+
+.pvl-key {
+    text-align: center;
+}
+
+.pvl-key kbd {
+    display: grid;
+    place-items: center;
+    height: 10rem;
+    border: 1px solid #c9ced6;
+    border-bottom-width: .6rem;
+    border-radius: 1rem;
+    background: #fff;
+    font-family: inherit;
+    font-size: 5.2rem;
+    color: #222;
+    box-shadow: 0 .6rem 1.6rem rgba(0, 0, 0, .08);
+}
+
+.pvl-key span {
+    display: block;
+    margin-top: .8rem;
+    font-family: monospace;
+    font-size: 1.3rem;
+    color: #6622bb;
+}
+
+/* Drawing vs. grey values */
+.pvl-sees {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4.8rem;
+    margin-top: 3.2rem;
+}
+
+.pvl-sees figure {
+    width: 36rem;
+    margin: 0;
+    text-align: center;
+}
+
+.pvl-sees figcaption {
+    margin-top: 1.2rem;
+    font-size: 1.6rem;
+    font-weight: 700;
+}
+
+.pvl-pixels {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    aspect-ratio: 1;
+    border-radius: .6rem;
+    overflow: hidden;
+    box-shadow: 0 .6rem 1.6rem rgba(0, 0, 0, .12);
+}
+
+.pvl-pixels span {
+    display: grid;
+    place-items: center;
+    font-family: monospace;
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.pvl-pixels span.is-ink {
+    color: #ddd;
+}
+
+/* Many different drawings of the same arrow */
+.pvl-variants {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.6rem;
+}
+
+.pvl-caption {
+    margin-top: 1.6rem;
+    text-align: center;
+}
+
+/* Examples -> model -> prediction */
+.pvl-learn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2.4rem;
+    margin-top: 3.2rem;
+}
+
+.pvl-step {
+    text-align: center;
+}
+
+.pvl-step > p {
+    margin: 1.6rem 0 0;
+    font-size: 1.6rem;
+    font-weight: 700;
+}
+
+.pvl-examples {
+    display: grid;
+    grid-template-columns: repeat(2, 14rem);
+    gap: 1.2rem;
+}
+
+.pvl-examples figure {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    margin: 0;
+}
+
+.pvl-examples img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: .6rem;
+    box-shadow: 0 .6rem 1.6rem rgba(0, 0, 0, .12);
+}
+
+.pvl-examples figcaption {
+    margin-top: .4rem;
+    font-size: 1.4rem;
+    color: #0b7f86;
+    font-weight: 700;
+}
+
+.pvl-model {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 20rem;
+    height: 20rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6622bb, #0b7f86);
+    color: #fff;
+    font-size: 2.8rem;
+    font-weight: 700;
+    line-height: 1.3;
+    box-shadow: 0 1.6rem 4rem rgba(102, 34, 187, .3);
+}
+
+.pvl-model small {
+    font-size: 1.4rem;
+    font-weight: 400;
+}
+
+.pvl-predict {
+    width: 22rem;
+}
+
+.pvl-predict-label {
+    display: block;
+    margin-top: 1.2rem;
+    padding: .8rem 1.6rem;
+    border-radius: .6rem;
+    background: #0b7f86;
+    color: #fff;
+    font-size: 2.4rem;
+    font-weight: 700;
+}
+
+.pvl-predict-label small {
+    font-weight: 400;
+    opacity: .85;
+}
+
+/* Side-by-side comparison */
+.pvl-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3.2rem;
+    margin-top: 3.2rem;
+    text-align: left;
+}
+
+.pvl-compare-col {
+    padding: 3.2rem;
+    border-top: .6rem solid #9aa3ad;
+    border-radius: .8rem;
+    background: #fff;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, .08);
+}
+
+.pvl-compare-col.is-learn {
+    border-top-color: #6622bb;
+}
+
+.pvl-compare-col h3 {
+    margin: 0;
+    font-size: 3.2rem;
+    font-weight: 700;
+}
+
+.pvl-compare .pvl-compare-example {
+    margin: .4rem 0 2.4rem;
+    color: #777;
+}
+
+.pvl-compare dl {
+    display: grid;
+    grid-template-columns: 14rem 1fr;
+    gap: 1.2rem 1.6rem;
+    margin: 0;
+}
+
+.pvl-compare dt {
+    font-size: 1.4rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #777;
+    line-height: 1.6;
+}
+
+.pvl-compare dd {
+    margin: 0;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+    .pvl-split,
+    .pvl-compare {
+        grid-template-columns: 1fr;
+    }
+
+    .pvl-keys {
+        grid-template-columns: repeat(3, 8rem);
+    }
+
+    .pvl-key kbd {
+        height: 7rem;
+        font-size: 3.6rem;
+    }
+
+    .pvl-sees,
+    .pvl-learn {
+        flex-direction: column;
+    }
+
+    .pvl-flow-arrow {
+        transform: rotate(90deg);
+    }
+}
+
+/* ---------- Project pipeline slide ---------- */
+
+.pipeline {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4rem;
+    margin: 4rem 0 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: none;
+}
+
+.pipeline li {
+    position: relative;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.pipeline li::before {
+    content: none;
+}
+
+/* Arrow between steps */
+.pipeline li + li::after {
+    content: "→";
+    position: absolute;
+    top: 8rem;
+    left: -3.2rem;
+    font-size: 3.2rem;
+    line-height: 1;
+    color: #9aa3ad;
+}
+
+.pipeline-visual {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 19rem;
+    margin-bottom: 2rem;
+}
+
+.pipeline-visual img {
+    border-radius: .6rem;
+}
+
+.pipeline h3 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: .8rem;
+    font-size: 2.2rem;
+    font-weight: 700;
+}
+
+.pipeline p {
+    margin: 0;
+    font-size: 1.6rem;
+    line-height: 1.5;
+    opacity: .8;
+}
+
+.pipeline-num {
+    display: inline-grid;
+    place-items: center;
+    width: 3.2rem;
+    height: 3.2rem;
+    border-radius: 50%;
+    background: #6622bb;
+    color: #fff;
+    font-size: 1.6rem;
+    line-height: 1;
+}
+
+/* Step 1: a small pile of photos */
+.pipeline-stack img {
+    position: absolute;
+    width: 13rem;
+    box-shadow: 0 .6rem 1.6rem rgba(0, 0, 0, .18);
+}
+
+.pipeline-stack img:nth-child(1) { transform: translate(-3.2rem, -1.2rem) rotate(-8deg); }
+.pipeline-stack img:nth-child(2) { transform: translate(3.2rem, -.8rem) rotate(6deg); }
+.pipeline-stack img:nth-child(3) { transform: translate(0, 1.6rem) rotate(-1deg); }
+
+/* Step 2 reuses .pvl-model, just smaller */
+.pipeline-model.pvl-model {
+    width: 16rem;
+    height: 16rem;
+    font-size: 2.4rem;
+}
+
+/* Step 3 */
+.pipeline-robot {
+    width: 21rem;
+    height: 21rem;
+    object-fit: contain;
+}
+
+/* Step 4: photo with the prediction underneath */
+.pipeline-control {
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.pipeline-control img {
+    width: 13rem;
+    box-shadow: 0 .6rem 1.6rem rgba(0, 0, 0, .18);
+}
+
+.pipeline-chip {
+    padding: .6rem 1.2rem;
+    border-radius: .6rem;
+    background: #0b7f86;
+    color: #fff;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.pipeline-chip code {
+    padding: 0;
+    background: none;
+    color: inherit;
+    font-size: 1.4rem;
+}
+
+@media (max-width: 768px) {
+    .pipeline {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .pipeline li + li::after {
+        content: none;
+    }
+}
+
+/* ---------- Settings button ---------- */
+
+.ws-settings-toggle {
+    position: fixed;
+    left: 1.6rem;
+    bottom: 1.6rem;
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    width: 4rem;
+    height: 4rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, .55);
+    color: #fff;
+    cursor: pointer;
+    opacity: .15;
+    transition: opacity .2s;
+}
+
+.ws-settings-toggle:hover,
+.ws-settings-toggle:focus-visible {
+    opacity: 1;
+}
+
+/* ---------- Settings panel ---------- */
+
+.ws-settings-open,
+.ws-settings-open body {
+    overflow: hidden;
+}
+
+.ws-settings {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2.4rem;
+    background: rgba(20, 20, 30, .6);
+    font-family: Roboto, Helvetica, Arial, sans-serif;
+    font-size: 1.5rem;
+    line-height: 1.4;
+    color: #222;
+    text-align: left;
+}
+
+.ws-settings[hidden] {
+    display: none;
+}
+
+.ws-settings-dialog {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 96rem;
+    max-height: 100%;
+    background: #fff;
+    border-radius: 1.2rem;
+    box-shadow: 0 2rem 6rem rgba(0, 0, 0, .35);
+    overflow: hidden;
+}
+
+.ws-settings h2,
+.ws-settings h3 {
+    margin: 0;
+    font-family: inherit;
+    font-weight: 700;
+    line-height: 1.2;
+    color: inherit;
+}
+
+.ws-settings h2 {
+    font-size: 2rem;
+}
+
+.ws-settings h3 {
+    font-size: 1.6rem;
+}
+
+.ws-settings ul,
+.ws-settings ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.ws-settings li,
+.ws-settings p,
+.ws-settings label {
+    margin: 0;
+    line-height: 1.4;
+}
+
+.ws-settings button {
+    width: auto;
+    height: auto;
+    text-transform: none;
+    letter-spacing: normal;
+    line-height: 1.2;
+}
+
+.ws-settings li::before {
+    content: none;
+}
+
+.ws-settings-header,
+.ws-settings-footer {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.6rem 2.4rem;
+    border-bottom: 1px solid #e6e6ea;
+}
+
+.ws-settings-footer {
+    border-top: 1px solid #e6e6ea;
+    border-bottom: 0;
+}
+
+.ws-settings-close {
+    margin-left: auto;
+    border: 0;
+    background: none;
+    font-size: 2.8rem;
+    line-height: 1;
+    color: #666;
+    cursor: pointer;
+}
+
+.ws-settings-body {
+    display: grid;
+    grid-template-columns: 1fr 1.3fr;
+    gap: 3.2rem;
+    padding: 2.4rem;
+    overflow: auto;
+}
+
+.ws-settings-group {
+    min-width: 0;
+}
+
+.ws-settings-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.ws-settings-count {
+    margin-left: auto;
+    font-size: 1.3rem;
+    color: #666;
+}
+
+.ws-settings .ws-settings-hint {
+    margin: .4rem 0 1.2rem;
+    font-size: 1.3rem;
+    color: #666;
+}
+
+.ws-settings label {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+    min-width: 0;
+    padding: .6rem .8rem;
+    border-radius: .6rem;
+    cursor: pointer;
+}
+
+.ws-settings label:hover {
+    background: #f3f3f6;
+}
+
+.ws-settings input[type="checkbox"] {
+    width: 1.8rem;
+    height: 1.8rem;
+    margin: 0;
+    flex: none;
+    accent-color: #62b;
+}
+
+.ws-settings-leads img {
+    width: 4rem;
+    height: 4rem;
+    flex: none;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.ws-settings-leads span {
+    font-size: 1.3rem;
+    color: #666;
+}
+
+.ws-settings-leads strong {
+    display: block;
+    font-size: 1.5rem;
+    color: #222;
+}
+
+.ws-settings-slides li {
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+}
+
+.ws-settings .ws-settings-slides li.is-chapter {
+    margin-top: .8rem;
+    border-top: 1px solid #e6e6ea;
+    padding-top: .4rem;
+}
+
+.ws-settings-slides li.is-chapter .ws-slide-title {
+    font-weight: 700;
+}
+
+.ws-settings-slides label:has(input:not(:checked)) .ws-slide-title {
+    color: #999;
+    text-decoration: line-through;
+}
+
+.ws-slide-number {
+    width: 2.4rem;
+    flex: none;
+    text-align: right;
+    font-size: 1.2rem;
+    color: #999;
+    font-variant-numeric: tabular-nums;
+}
+
+.ws-slide-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ws-settings-spacer {
+    flex: 1;
+}
+
+.ws-settings .ws-btn {
+    padding: .8rem 1.6rem;
+    border: 1px solid #d0d0d8;
+    border-radius: .6rem;
+    background: #fff;
+    font: inherit;
+    font-size: 1.4rem;
+    color: #222;
+    cursor: pointer;
+}
+
+.ws-settings .ws-btn:hover {
+    background: #f3f3f6;
+}
+
+.ws-settings .ws-btn-small {
+    padding: .3rem .8rem;
+    font-size: 1.2rem;
+    white-space: nowrap;
+}
+
+.ws-settings .ws-btn-primary {
+    border-color: #62b;
+    background: #62b;
+    color: #fff;
+}
+
+.ws-settings .ws-btn-primary:hover {
+    background: #51a;
+}
+
+.ws-settings .ws-btn:disabled {
+    opacity: .4;
+    cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+    .ws-settings-body {
+        grid-template-columns: 1fr;
+    }
+}
